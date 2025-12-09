@@ -273,7 +273,10 @@
           画像ファイルを選択
           <input type="file" id="art-image-input" accept="image/*" />
         </label>
-        <p class="note">※ ログインコードごとに1枚の画像が保存されます。（同じPCの同じブラウザ内）</p>
+        <p class="note">
+          ※ ログインコードごとに1枚の画像がオンラインに保存されます。<br>
+          （同じコードでログインすれば、どの端末からでも見られます）
+        </p>
       </div>
 
       <div class="card">
@@ -360,46 +363,87 @@
     </section>
   </div>
 
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+
   <script>
-    const STORAGE_KEYS = {
-      artworks: "karts_artworks",
-      surveys: "karts_surveys",
+    // ★★★ ここを自分の Firebase の設定に書き換えてね ★★★
+    // Firebase コンソール → 歯車アイコン → プロジェクトの設定 → マイアプリ → Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDP1LgZclt3Atv2B1Z4aWNMruxfIHGnpWc",
+      authDomain: "komorebi1221-c3dd8.firebaseapp.com",
+      projectId: "komorebi1221-c3dd8",
+      storageBucket: "komorebi1221-c3dd8.firebasestorage.app",
+      messagingSenderId: "72244772206",
+      appId: "1:72244772206:web:f3cc92e93f08292d17157f",
     };
 
-    let currentCode = null; // "A00001" など
-    let currentType = null; // "A" | "B" | "C"
-    let currentImageData = null;
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
 
+    const COLLECTIONS = {
+      artworks: "artworks", // A/B お客さんの作品
+      surveys: "surveys",   // C のアンケート
+    };
+
+    let currentCode = null;      // 例: "A00001"
+    let currentType = null;      // "A" | "B" | "C"
+    let currentImageUrl = null;  // Firebase Storage の画像URL
+
+    // 画面切替
     function showScreen(screenId) {
       document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
       const target = document.getElementById(screenId);
       if (target) target.classList.add("active");
     }
 
-    function loadArtworks() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.artworks)) || {};
-      } catch {
-        return {};
-      }
-    }
-    function saveArtworks(artworks) {
-      localStorage.setItem(STORAGE_KEYS.artworks, JSON.stringify(artworks));
+    /* ---------- Firebase ラッパ ---------- */
+
+    async function loadArtworkFromServer(code) {
+      const docRef = db.collection(COLLECTIONS.artworks).doc(code);
+      const snap = await docRef.get();
+      if (!snap.exists) return null;
+      return snap.data();
     }
 
-    function loadSurveys() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.surveys)) || [];
-      } catch {
-        return [];
-      }
-    }
-    function saveSurveys(surveys) {
-      localStorage.setItem(STORAGE_KEYS.surveys, JSON.stringify(surveys));
+    async function saveArtworkToServer(code, data) {
+      const docRef = db.collection(COLLECTIONS.artworks).doc(code);
+      await docRef.set(data, { merge: true });
     }
 
-    // ログイン処理
-    function handleLogin(e) {
+    async function uploadArtworkImage(code, file) {
+      const fileName = code + "_" + Date.now();
+      const ref = storage.ref().child("art-images/" + fileName);
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+      return url;
+    }
+
+    async function loadSurveysFromServer() {
+      const snap = await db
+        .collection(COLLECTIONS.surveys)
+        .orderBy("createdAt")
+        .get();
+      return snap.docs.map((doc) => doc.data());
+    }
+
+    async function addSurveyToServer(survey) {
+      await db.collection(COLLECTIONS.surveys).add(survey);
+    }
+
+    async function resetSurveysOnServer() {
+      const snap = await db.collection(COLLECTIONS.surveys).get();
+      const batch = db.batch();
+      snap.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+
+    /* ---------- ログイン処理 ---------- */
+
+    async function handleLogin(e) {
       e.preventDefault();
       const input = document.getElementById("login-code");
       const error = document.getElementById("login-error");
@@ -407,7 +451,8 @@
 
       const pattern = /^[ABC][0-9]{5}$/;
       if (!pattern.test(raw)) {
-        error.textContent = "「B00001」のように、アルファベット1文字と5桁の数字で入力してください。";
+        error.textContent =
+          "「B00001」のように、アルファベット1文字と5桁の数字で入力してください。";
         return;
       }
 
@@ -416,16 +461,17 @@
       error.textContent = "";
 
       if (currentType === "A" || currentType === "B") {
-        setupArtScreen();
+        await setupArtScreen();
         showScreen("art-screen");
       } else if (currentType === "C") {
-        setupAdminScreen();
+        await setupAdminScreen();
         showScreen("admin-screen");
       }
     }
 
-    // A/B 作品画面
-    function setupArtScreen() {
+    /* ---------- A/B 作品画面 ---------- */
+
+    async function setupArtScreen() {
       const title = document.getElementById("art-title");
       const commentInput = document.getElementById("art-comment");
       const countSpan = document.getElementById("art-comment-count");
@@ -434,16 +480,16 @@
 
       title.textContent = currentCode + " さんの作品ページ";
 
-      const artworks = loadArtworks();
-      const data = artworks[currentCode];
+      // Firestore から読み込み
+      const data = await loadArtworkFromServer(currentCode);
 
-      if (data && data.imageData) {
-        currentImageData = data.imageData;
-        imagePreview.src = data.imageData;
+      if (data && data.imageUrl) {
+        currentImageUrl = data.imageUrl;
+        imagePreview.src = currentImageUrl;
         imagePreview.classList.remove("hidden");
         imagePlaceholder.classList.add("hidden");
       } else {
-        currentImageData = null;
+        currentImageUrl = null;
         imagePreview.src = "";
         imagePreview.classList.add("hidden");
         imagePlaceholder.classList.remove("hidden");
@@ -454,36 +500,56 @@
       document.getElementById("art-save-message").textContent = "";
     }
 
-    function handleImageChange(e) {
+    async function handleImageChange(e) {
       const file = e.target.files[0];
       const imagePreview = document.getElementById("art-image-preview");
       const imagePlaceholder = document.getElementById("art-image-placeholder");
-      if (!file) return;
+      const saveMsg = document.getElementById("art-save-message");
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        currentImageData = event.target.result;
-        imagePreview.src = currentImageData;
-        imagePreview.classList.remove("hidden");
-        imagePlaceholder.classList.add("hidden");
-      };
-      reader.readAsDataURL(file);
+      if (!file || !currentCode) return;
+
+      saveMsg.textContent = "画像をアップロード中です…";
+
+      try {
+        // ローカルプレビュー
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          imagePreview.src = event.target.result;
+          imagePreview.classList.remove("hidden");
+          imagePlaceholder.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+
+        // Storage へアップロード
+        const url = await uploadArtworkImage(currentCode, file);
+        currentImageUrl = url;
+
+        saveMsg.textContent = "画像をアップロードしました。「作品を保存する」で確定します。";
+        setTimeout(() => (saveMsg.textContent = ""), 2500);
+      } catch (err) {
+        console.error(err);
+        saveMsg.textContent = "画像のアップロードに失敗しました。時間をおいて再度お試しください。";
+      }
     }
 
-    function handleSaveArt() {
+    async function handleSaveArt() {
       if (!currentCode) return;
       const commentInput = document.getElementById("art-comment");
       const saveMsg = document.getElementById("art-save-message");
 
-      const artworks = loadArtworks();
-      artworks[currentCode] = {
-        imageData: currentImageData || null,
-        comment: commentInput.value || "",
-      };
-      saveArtworks(artworks);
+      try {
+        await saveArtworkToServer(currentCode, {
+          imageUrl: currentImageUrl || null,
+          comment: commentInput.value || "",
+          updatedAt: new Date().toISOString(),
+        });
 
-      saveMsg.textContent = "保存しました。";
-      setTimeout(() => (saveMsg.textContent = ""), 2000);
+        saveMsg.textContent = "保存しました。";
+        setTimeout(() => (saveMsg.textContent = ""), 2000);
+      } catch (err) {
+        console.error(err);
+        saveMsg.textContent = "保存に失敗しました。時間をおいて再度お試しください。";
+      }
     }
 
     function handleCommentInput(e) {
@@ -491,14 +557,15 @@
       countSpan.textContent = e.target.value.length.toString();
     }
 
-    // C 管理画面
-    function setupAdminScreen() {
+    /* ---------- C 管理画面（アンケート） ---------- */
+
+    async function setupAdminScreen() {
       document.getElementById("survey-save-message").textContent = "";
       document.getElementById("survey-reset-message").textContent = "";
-      renderSurveyData();
+      await renderSurveyData();
     }
 
-    function handleSurveySubmit(e) {
+    async function handleSurveySubmit(e) {
       e.preventDefault();
       const ageInput = document.getElementById("age");
       const walletInput = document.getElementById("wallet");
@@ -514,30 +581,34 @@
         return;
       }
 
-      const surveys = loadSurveys();
-      surveys.push({
-        age,
-        wallet,
-        freeComment,
-        createdAt: new Date().toISOString(),
-      });
-      saveSurveys(surveys);
+      try {
+        await addSurveyToServer({
+          age,
+          wallet,
+          freeComment,
+          createdAt: firebase.firestore.Timestamp.now(),
+        });
 
-      ageInput.value = "";
-      walletInput.value = "";
-      freeInput.value = "";
+        ageInput.value = "";
+        walletInput.value = "";
+        freeInput.value = "";
 
-      saveMsg.textContent = "アンケート結果を追加しました。";
-      setTimeout(() => (saveMsg.textContent = ""), 2000);
+        saveMsg.textContent = "アンケート結果を追加しました。";
+        setTimeout(() => (saveMsg.textContent = ""), 2000);
 
-      renderSurveyData();
+        await renderSurveyData();
+      } catch (err) {
+        console.error(err);
+        saveMsg.textContent = "保存に失敗しました。時間をおいて再度お試しください。";
+      }
     }
 
-    function renderSurveyData() {
-      const surveys = loadSurveys();
+    async function renderSurveyData() {
       const summaryDiv = document.getElementById("survey-summary");
       const ageChartDiv = document.getElementById("age-chart");
       const listDiv = document.getElementById("survey-list");
+
+      const surveys = await loadSurveysFromServer();
 
       if (!surveys.length) {
         summaryDiv.innerHTML = "<p>まだアンケート結果がありません。</p>";
@@ -547,9 +618,11 @@
       }
 
       const total = surveys.length;
-      const avgAge = (surveys.reduce((sum, s) => sum + s.age, 0) / total).toFixed(1);
+      const avgAge = (
+        surveys.reduce((sum, s) => sum + (s.age || 0), 0) / total
+      ).toFixed(1);
       const avgWallet = Math.round(
-        surveys.reduce((sum, s) => sum + s.wallet, 0) / total
+        surveys.reduce((sum, s) => sum + (s.wallet || 0), 0) / total
       );
 
       summaryDiv.innerHTML = `
@@ -595,7 +668,7 @@
           <tr>
             <td>${i + 1}</td>
             <td>${s.age}</td>
-            <td>${s.wallet.toLocaleString()}</td>
+            <td>${(s.wallet || 0).toLocaleString()}</td>
             <td>${escapeHtml(s.freeComment || "")}</td>
           </tr>
         `
@@ -619,21 +692,29 @@
       `;
     }
 
-    // アンケート全削除
-    function handleSurveyReset() {
+    async function handleSurveyReset() {
       const msg = document.getElementById("survey-reset-message");
       msg.textContent = "";
+
       if (!confirm("本当にアンケート結果をすべて削除しますか？\nこの操作は元に戻せません。")) {
         return;
       }
-      saveSurveys([]);
-      renderSurveyData();
-      msg.textContent = "アンケート結果をすべて削除しました。";
-      setTimeout(() => (msg.textContent = ""), 2500);
+
+      try {
+        await resetSurveysOnServer();
+        await renderSurveyData();
+        msg.textContent = "アンケート結果をすべて削除しました。";
+        setTimeout(() => (msg.textContent = ""), 2500);
+      } catch (err) {
+        console.error(err);
+        msg.textContent = "削除に失敗しました。時間をおいて再度お試しください。";
+      }
     }
 
+    /* ---------- 共通 ---------- */
+
     function escapeHtml(str) {
-      return str
+      return String(str)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -644,39 +725,44 @@
     function logout() {
       currentCode = null;
       currentType = null;
-      currentImageData = null;
+      currentImageUrl = null;
       document.getElementById("login-code").value = "";
       document.getElementById("login-error").textContent = "";
       showScreen("login-screen");
     }
 
     function init() {
-      document.getElementById("login-form").addEventListener("submit", handleLogin);
+      document
+        .getElementById("login-form")
+        .addEventListener("submit", (e) => { handleLogin(e); });
 
       document
         .getElementById("art-image-input")
-        .addEventListener("change", handleImageChange);
+        .addEventListener("change", (e) => { handleImageChange(e); });
+
       document
         .getElementById("art-comment")
         .addEventListener("input", handleCommentInput);
+
       document
         .getElementById("save-art")
-        .addEventListener("click", handleSaveArt);
+        .addEventListener("click", () => { handleSaveArt(); });
+
       document
         .getElementById("logout-art")
         .addEventListener("click", logout);
 
       document
         .getElementById("survey-form")
-        .addEventListener("submit", handleSurveySubmit);
+        .addEventListener("submit", (e) => { handleSurveySubmit(e); });
+
       document
         .getElementById("logout-admin")
         .addEventListener("click", logout);
 
-      // ★ リセットボタンのイベント
       document
         .getElementById("reset-survey")
-        .addEventListener("click", handleSurveyReset);
+        .addEventListener("click", () => { handleSurveyReset(); });
     }
 
     document.addEventListener("DOMContentLoaded", init);
