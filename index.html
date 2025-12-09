@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>K.ARTS ログイン</title>
+  <!-- ★ スマホ用の表示調整 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+    #app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 16px 10px 32px;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    .brand {
+      text-align: center;
+      font-size: 44px;
+      letter-spacing: 0.2em;
+      margin: 12px 0 6px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 15px;
+      color: #4b5563;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    #login-form {
+      max-width: 480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 16px;
+    }
+    label {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 18px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      outline: none;
+      background: #ffffff;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #2563eb20;
+    }
+    textarea { resize: vertical; }
+
+    .hint { font-size: 13px; color: #6b7280; }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn.primary { background: #2563eb; color: #ffffff; }
+    .btn.primary:hover { opacity: 0.9; }
+    .btn.secondary { background: #e5e7eb; color: #111827; }
+    .btn.secondary:hover { background: #d1d5db; }
+    .btn.small { font-size: 14px; padding: 6px 12px; }
+    .btn.wide { width: 100%; }
+
+    /* ★ リセットボタン用 */
+    .btn.danger {
+      background: #dc2626;
+      color: #ffffff;
+    }
+    .btn.danger:hover {
+      opacity: 0.9;
+    }
+
+    .error-message { color: #b91c1c; min-height: 1.2em; }
+    .info-message { color: #047857; min-height: 1.2em; font-size: 14px; margin-top: 8px; }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .top-bar h2 { margin: 0; }
+
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 14px 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 12px #0000000a;
+    }
+    .card h3 { margin-top: 0; }
+
+    .image-area {
+      border-radius: 16px;
+      border: 1px dashed #d1d5db;
+      background: #f9fafb;
+      padding: 12px;
+      min-height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .art-image {
+      max-width: 100%;
+      max-height: 280px;
+      border-radius: 12px;
+    }
+    .image-placeholder {
+      color: #9ca3af;
+      text-align: center;
+      padding: 24px 8px;
+    }
+    .hidden { display: none; }
+
+    .file-label {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid #9ca3af;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .file-label input { display: none; }
+
+    .note {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+    }
+
+    .char-counter {
+      text-align: right;
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .form-row { margin-bottom: 12px; }
+
+    .chart { margin-top: 12px; }
+    .chart-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .chart-label { width: 80px; font-size: 13px; }
+    .chart-bar {
+      flex: 1;
+      height: 12px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+    .chart-bar-fill {
+      height: 100%;
+      background: #2563eb;
+    }
+    .chart-value {
+      width: 40px;
+      text-align: right;
+      font-size: 12px;
+    }
+
+    /* ★ 一覧テーブルをスマホで横スクロール可に */
+    #survey-list {
+      width: 100%;
+      overflow-x: auto;
+    }
+    #survey-list table {
+      width: 100%;
+      min-width: 420px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    #survey-list th,
+    #survey-list td {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 6px 4px;
+    }
+    #survey-list th {
+      text-align: left;
+      background: #f9fafb;
+    }
+
+    @media (max-width: 640px) {
+      #app {
+        padding: 12px 10px 24px;
+      }
+      .brand { font-size: 34px; letter-spacing: 0.15em; }
+      .subtitle { font-size: 14px; }
+      input[type="text"],
+      input[type="number"],
+      textarea { font-size: 16px; }
+      .btn { font-size: 16px; }
+      .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .chart-label { width: 70px; }
+    }
+
+    @media (max-width: 380px) {
+      .brand { font-size: 30px; letter-spacing: 0.12em; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- ログイン画面 -->
+    <section id="login-screen" class="screen active">
+      <h1 class="brand">K.ARTS</h1>
+      <p class="subtitle">
+        缶ケースに書いてあるログインコードを入力してください<br />
+        例） B00001 
+      </p>
+
+      <form id="login-form">
+        <label for="login-code">ログインコード（アルファベット1文字 + 5桁数字）</label>
+        <input
+          type="text"
+          id="login-code"
+          maxlength="6"
+          autocomplete="off"
+          placeholder="B00001 など"
+          required
+        />
+
+        <button type="submit" class="btn primary">ログイン</button>
+        <p id="login-error" class="error-message"></p>
+      </form>
+    </section>
+
+    <!-- A / B 用 作品編集画面 -->
+    <section id="art-screen" class="screen">
+      <header class="top-bar">
+        <h2 id="art-title"></h2>
+        <button id="logout-art" class="btn secondary small">ログアウト</button>
+      </header>
+
+      <div class="card">
+        <h3>作品の写真</h3>
+        <div class="image-area">
+          <img id="art-image-preview" alt="作品画像プレビュー" class="art-image hidden" />
+          <div id="art-image-placeholder" class="image-placeholder">
+            まだ画像が登録されていません
+          </div>
+        </div>
+        <label class="file-label">
+          画像ファイルを選択
+          <input type="file" id="art-image-input" accept="image/*" />
+        </label>
+        <p class="note">※ ログインコードごとに1枚の画像が保存されます。（同じPCの同じブラウザ内）</p>
+      </div>
+
+      <div class="card">
+        <h3>作品への思い（0〜300文字）</h3>
+        <textarea
+          id="art-comment"
+          rows="5"
+          maxlength="300"
+          placeholder="この作品に込めた思いを書いてください。（0〜300文字）"
+        ></textarea>
+        <div class="char-counter">
+          <span id="art-comment-count">0</span>/300 文字
+        </div>
+      </div>
+
+      <div class="card">
+        <button id="save-art" class="btn primary wide">作品を保存する</button>
+        <p id="art-save-message" class="info-message"></p>
+      </div>
+    </section>
+
+    <!-- C 用 管理画面（アンケート） -->
+    <section id="admin-screen" class="screen">
+      <header class="top-bar">
+        <h2>管理画面（Cユーザー専用）</h2>
+        <button id="logout-admin" class="btn secondary small">ログアウト</button>
+      </header>
+
+      <div class="card">
+        <h3>アンケート結果の入力</h3>
+        <form id="survey-form">
+          <div class="form-row">
+            <label for="age">年齢</label>
+            <input type="number" id="age" min="0" max="120" placeholder="例）78" required />
+          </div>
+          <div class="form-row">
+            <label for="wallet">財布の中身（円）</label>
+            <input
+              type="number"
+              id="wallet"
+              min="0"
+              step="100"
+              placeholder="例）3000"
+              required
+            />
+          </div>
+          <div class="form-row">
+            <label for="free-comment">自由な意見</label>
+            <textarea
+              id="free-comment"
+              rows="3"
+              placeholder="ご自由にお書きください。"
+            ></textarea>
+          </div>
+
+          <button type="submit" class="btn primary wide">アンケート結果を追加</button>
+        </form>
+        <p id="survey-save-message" class="info-message"></p>
+      </div>
+
+      <div class="card">
+        <h3>アンケート集計（簡易グラフ）</h3>
+        <div id="survey-summary">
+          <p>まだアンケート結果がありません。</p>
+        </div>
+        <div id="age-chart" class="chart"></div>
+      </div>
+
+      <div class="card">
+        <h3>アンケート一覧</h3>
+        <div id="survey-list"></div>
+      </div>
+
+      <!-- ★ アンケートをリセットするカード -->
+      <div class="card">
+        <h3>アンケートのリセット</h3>
+        <p class="note">
+          このボタンを押すと、保存されているアンケート結果がすべて削除されます。<br>
+          （元に戻すことはできません）
+        </p>
+        <button id="reset-survey" class="btn danger wide">アンケートを全て削除</button>
+        <p id="survey-reset-message" class="info-message"></p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEYS = {
+      artworks: "karts_artworks",
+      surveys: "karts_surveys",
+    };
+
+    let currentCode = null; // "A00001" など
+    let currentType = null; // "A" | "B" | "C"
+    let currentImageData = null;
+
+    function showScreen(screenId) {
+      document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+      const target = document.getElementById(screenId);
+      if (target) target.classList.add("active");
+    }
+
+    function loadArtworks() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEYS.artworks)) || {};
+      } catch {
+        return {};
+      }
+    }
+    function saveArtworks(artworks) {
+      localStorage.setItem(STORAGE_KEYS.artworks, JSON.stringify(artworks));
+    }
+
+    function loadSurveys() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEYS.surveys)) || [];
+      } catch {
+        return [];
+      }
+    }
+    function saveSurveys(surveys) {
+      localStorage.setItem(STORAGE_KEYS.surveys, JSON.stringify(surveys));
+    }
+
+    // ログイン処理
+    function handleLogin(e) {
+      e.preventDefault();
+      const input = document.getElementById("login-code");
+      const error = document.getElementById("login-error");
+      const raw = (input.value || "").trim().toUpperCase();
+
+      const pattern = /^[ABC][0-9]{5}$/;
+      if (!pattern.test(raw)) {
+        error.textContent = "「B00001」のように、アルファベット1文字と5桁の数字で入力してください。";
+        return;
+      }
+
+      currentCode = raw;
+      currentType = raw.charAt(0);
+      error.textContent = "";
+
+      if (currentType === "A" || currentType === "B") {
+        setupArtScreen();
+        showScreen("art-screen");
+      } else if (currentType === "C") {
+        setupAdminScreen();
+        showScreen("admin-screen");
+      }
+    }
+
+    // A/B 作品画面
+    function setupArtScreen() {
+      const title = document.getElementById("art-title");
+      const commentInput = document.getElementById("art-comment");
+      const countSpan = document.getElementById("art-comment-count");
+      const imagePreview = document.getElementById("art-image-preview");
+      const imagePlaceholder = document.getElementById("art-image-placeholder");
+
+      title.textContent = currentCode + " さんの作品ページ";
+
+      const artworks = loadArtworks();
+      const data = artworks[currentCode];
+
+      if (data && data.imageData) {
+        currentImageData = data.imageData;
+        imagePreview.src = data.imageData;
+        imagePreview.classList.remove("hidden");
+        imagePlaceholder.classList.add("hidden");
+      } else {
+        currentImageData = null;
+        imagePreview.src = "";
+        imagePreview.classList.add("hidden");
+        imagePlaceholder.classList.remove("hidden");
+      }
+
+      commentInput.value = data && data.comment ? data.comment : "";
+      countSpan.textContent = commentInput.value.length.toString();
+      document.getElementById("art-save-message").textContent = "";
+    }
+
+    function handleImageChange(e) {
+      const file = e.target.files[0];
+      const imagePreview = document.getElementById("art-image-preview");
+      const imagePlaceholder = document.getElementById("art-image-placeholder");
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentImageData = event.target.result;
+        imagePreview.src = currentImageData;
+        imagePreview.classList.remove("hidden");
+        imagePlaceholder.classList.add("hidden");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function handleSaveArt() {
+      if (!currentCode) return;
+      const commentInput = document.getElementById("art-comment");
+      const saveMsg = document.getElementById("art-save-message");
+
+      const artworks = loadArtworks();
+      artworks[currentCode] = {
+        imageData: currentImageData || null,
+        comment: commentInput.value || "",
+      };
+      saveArtworks(artworks);
+
+      saveMsg.textContent = "保存しました。";
+      setTimeout(() => (saveMsg.textContent = ""), 2000);
+    }
+
+    function handleCommentInput(e) {
+      const countSpan = document.getElementById("art-comment-count");
+      countSpan.textContent = e.target.value.length.toString();
+    }
+
+    // C 管理画面
+    function setupAdminScreen() {
+      document.getElementById("survey-save-message").textContent = "";
+      document.getElementById("survey-reset-message").textContent = "";
+      renderSurveyData();
+    }
+
+    function handleSurveySubmit(e) {
+      e.preventDefault();
+      const ageInput = document.getElementById("age");
+      const walletInput = document.getElementById("wallet");
+      const freeInput = document.getElementById("free-comment");
+      const saveMsg = document.getElementById("survey-save-message");
+
+      const age = parseInt(ageInput.value, 10);
+      const wallet = parseInt(walletInput.value, 10);
+      const freeComment = (freeInput.value || "").trim();
+
+      if (Number.isNaN(age) || Number.isNaN(wallet)) {
+        saveMsg.textContent = "年齢と財布の中身を正しく入力してください。";
+        return;
+      }
+
+      const surveys = loadSurveys();
+      surveys.push({
+        age,
+        wallet,
+        freeComment,
+        createdAt: new Date().toISOString(),
+      });
+      saveSurveys(surveys);
+
+      ageInput.value = "";
+      walletInput.value = "";
+      freeInput.value = "";
+
+      saveMsg.textContent = "アンケート結果を追加しました。";
+      setTimeout(() => (saveMsg.textContent = ""), 2000);
+
+      renderSurveyData();
+    }
+
+    function renderSurveyData() {
+      const surveys = loadSurveys();
+      const summaryDiv = document.getElementById("survey-summary");
+      const ageChartDiv = document.getElementById("age-chart");
+      const listDiv = document.getElementById("survey-list");
+
+      if (!surveys.length) {
+        summaryDiv.innerHTML = "<p>まだアンケート結果がありません。</p>";
+        ageChartDiv.innerHTML = "";
+        listDiv.innerHTML = "";
+        return;
+      }
+
+      const total = surveys.length;
+      const avgAge = (surveys.reduce((sum, s) => sum + s.age, 0) / total).toFixed(1);
+      const avgWallet = Math.round(
+        surveys.reduce((sum, s) => sum + s.wallet, 0) / total
+      );
+
+      summaryDiv.innerHTML = `
+        <p>件数：${total} 件</p>
+        <p>平均年齢：${avgAge} 歳</p>
+        <p>財布の中身の平均：${avgWallet.toLocaleString()} 円</p>
+      `;
+
+      const ageGroups = [
+        { label: "〜39歳", min: 0, max: 39, count: 0 },
+        { label: "40〜64歳", min: 40, max: 64, count: 0 },
+        { label: "65歳〜", min: 65, max: 150, count: 0 },
+      ];
+
+      surveys.forEach((s) => {
+        for (const g of ageGroups) {
+          if (s.age >= g.min && s.age <= g.max) {
+            g.count++;
+            break;
+          }
+        }
+      });
+
+      const maxCount = Math.max(...ageGroups.map((g) => g.count), 1);
+      ageChartDiv.innerHTML = "";
+      ageGroups.forEach((g) => {
+        const percent = (g.count / maxCount) * 100;
+        const row = document.createElement("div");
+        row.className = "chart-row";
+        row.innerHTML = `
+          <div class="chart-label">${g.label}</div>
+          <div class="chart-bar">
+            <div class="chart-bar-fill" style="width: ${percent}%;"></div>
+          </div>
+          <div class="chart-value">${g.count}</div>
+        `;
+        ageChartDiv.appendChild(row);
+      });
+
+      const rowsHtml = surveys
+        .map(
+          (s, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${s.age}</td>
+            <td>${s.wallet.toLocaleString()}</td>
+            <td>${escapeHtml(s.freeComment || "")}</td>
+          </tr>
+        `
+        )
+        .join("");
+
+      listDiv.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>年齢</th>
+              <th>財布の中身（円）</th>
+              <th>自由な意見</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // アンケート全削除
+    function handleSurveyReset() {
+      const msg = document.getElementById("survey-reset-message");
+      msg.textContent = "";
+      if (!confirm("本当にアンケート結果をすべて削除しますか？\nこの操作は元に戻せません。")) {
+        return;
+      }
+      saveSurveys([]);
+      renderSurveyData();
+      msg.textContent = "アンケート結果をすべて削除しました。";
+      setTimeout(() => (msg.textContent = ""), 2500);
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function logout() {
+      currentCode = null;
+      currentType = null;
+      currentImageData = null;
+      document.getElementById("login-code").value = "";
+      document.getElementById("login-error").textContent = "";
+      showScreen("login-screen");
+    }
+
+    function init() {
+      document.getElementById("login-form").addEventListener("submit", handleLogin);
+
+      document
+        .getElementById("art-image-input")
+        .addEventListener("change", handleImageChange);
+      document
+        .getElementById("art-comment")
+        .addEventListener("input", handleCommentInput);
+      document
+        .getElementById("save-art")
+        .addEventListener("click", handleSaveArt);
+      document
+        .getElementById("logout-art")
+        .addEventListener("click", logout);
+
+      document
+        .getElementById("survey-form")
+        .addEventListener("submit", handleSurveySubmit);
+      document
+        .getElementById("logout-admin")
+        .addEventListener("click", logout);
+
+      // ★ リセットボタンのイベント
+      document
+        .getElementById("reset-survey")
+        .addEventListener("click", handleSurveyReset);
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
