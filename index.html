@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -363,14 +363,12 @@
     </section>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK（Storage なし） -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 
   <script>
-    // ★★★ ここを自分の Firebase の設定に書き換えてね ★★★
-    // Firebase コンソール → 歯車アイコン → プロジェクトの設定 → マイアプリ → Config
+    // Firebase 設定
     const firebaseConfig = {
       apiKey: "AIzaSyDP1LgZclt3Atv2B1Z4aWNMruxfIHGnpWc",
       authDomain: "komorebi1221-c3dd8.firebaseapp.com",
@@ -382,7 +380,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-    const storage = firebase.storage();
 
     const COLLECTIONS = {
       artworks: "artworks", // A/B お客さんの作品
@@ -391,7 +388,7 @@
 
     let currentCode = null;      // 例: "A00001"
     let currentType = null;      // "A" | "B" | "C"
-    let currentImageUrl = null;  // Firebase Storage の画像URL
+    let currentImageData = null; // 画像の Base64 データ
 
     // 画面切替
     function showScreen(screenId) {
@@ -412,14 +409,6 @@
     async function saveArtworkToServer(code, data) {
       const docRef = db.collection(COLLECTIONS.artworks).doc(code);
       await docRef.set(data, { merge: true });
-    }
-
-    async function uploadArtworkImage(code, file) {
-      const fileName = code + "_" + Date.now();
-      const ref = storage.ref().child("art-images/" + fileName);
-      await ref.put(file);
-      const url = await ref.getDownloadURL();
-      return url;
     }
 
     async function loadSurveysFromServer() {
@@ -480,16 +469,15 @@
 
       title.textContent = currentCode + " さんの作品ページ";
 
-      // Firestore から読み込み
       const data = await loadArtworkFromServer(currentCode);
 
-      if (data && data.imageUrl) {
-        currentImageUrl = data.imageUrl;
-        imagePreview.src = currentImageUrl;
+      if (data && data.imageData) {
+        currentImageData = data.imageData;
+        imagePreview.src = currentImageData;
         imagePreview.classList.remove("hidden");
         imagePlaceholder.classList.add("hidden");
       } else {
-        currentImageUrl = null;
+        currentImageData = null;
         imagePreview.src = "";
         imagePreview.classList.add("hidden");
         imagePlaceholder.classList.remove("hidden");
@@ -500,7 +488,7 @@
       document.getElementById("art-save-message").textContent = "";
     }
 
-    async function handleImageChange(e) {
+    function handleImageChange(e) {
       const file = e.target.files[0];
       const imagePreview = document.getElementById("art-image-preview");
       const imagePlaceholder = document.getElementById("art-image-placeholder");
@@ -508,28 +496,22 @@
 
       if (!file || !currentCode) return;
 
-      saveMsg.textContent = "画像をアップロード中です…";
+      // 画像読み込み
+      saveMsg.textContent = "画像を読み込み中です…";
 
-      try {
-        // ローカルプレビュー
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          imagePreview.src = event.target.result;
-          imagePreview.classList.remove("hidden");
-          imagePlaceholder.classList.add("hidden");
-        };
-        reader.readAsDataURL(file);
-
-        // Storage へアップロード
-        const url = await uploadArtworkImage(currentCode, file);
-        currentImageUrl = url;
-
-        saveMsg.textContent = "画像をアップロードしました。「作品を保存する」で確定します。";
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentImageData = event.target.result; // dataURL
+        imagePreview.src = currentImageData;
+        imagePreview.classList.remove("hidden");
+        imagePlaceholder.classList.add("hidden");
+        saveMsg.textContent = "画像を読み込みました。「作品を保存する」を押すと保存されます。";
         setTimeout(() => (saveMsg.textContent = ""), 2500);
-      } catch (err) {
-        console.error(err);
-        saveMsg.textContent = "画像のアップロードに失敗しました。時間をおいて再度お試しください。";
-      }
+      };
+      reader.onerror = () => {
+        saveMsg.textContent = "画像の読み込みに失敗しました。別の画像で試してください。";
+      };
+      reader.readAsDataURL(file);
     }
 
     async function handleSaveArt() {
@@ -539,7 +521,7 @@
 
       try {
         await saveArtworkToServer(currentCode, {
-          imageUrl: currentImageUrl || null,
+          imageData: currentImageData || null,
           comment: commentInput.value || "",
           updatedAt: new Date().toISOString(),
         });
@@ -725,7 +707,7 @@
     function logout() {
       currentCode = null;
       currentType = null;
-      currentImageUrl = null;
+      currentImageData = null;
       document.getElementById("login-code").value = "";
       document.getElementById("login-error").textContent = "";
       showScreen("login-screen");
