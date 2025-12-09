@@ -8,7 +8,8 @@ const COLLECTIONS = {
 
 let currentCode = null;      // 例: "A00001"
 let currentType = null;      // "A" | "B" | "C"
-let currentImageUrl = null;  // Firebase Storage 上の画像URL
+let currentImageUrl = null;  // 画像のURL（Cloudinary）
+
 
 // 画面切替
 function showScreen(screenId) {
@@ -17,7 +18,7 @@ function showScreen(screenId) {
   if (target) target.classList.add("active");
 }
 
-/* -------------------- Firebase 関連 -------------------- */
+/* -------------------- Firestore 関連 -------------------- */
 
 // 作品を Firestore から取得
 async function loadArtworkFromServer(code) {
@@ -56,13 +57,38 @@ async function resetSurveysOnServer() {
   await batch.commit();
 }
 
-// 画像アップロード（Firebase Storage）
+/* -------------------- 画像アップロード（Cloudinary） -------------------- */
+
+// Cloudinary に画像をアップロードして URL を返す
 async function uploadArtworkImage(code, file) {
-  const fileName = `${code}_${Date.now()}`;
-  const ref = storage.ref().child(`art-images/${fileName}`);
-  await ref.put(file);
-  const url = await ref.getDownloadURL();
-  return url;
+  // ★ Cloudinary の設定（自分の値に合わせてね）
+  const cloudName = "drfgen4gm";     // ダッシュボードに出ている Cloud name
+  const uploadPreset = "unsigned";   // 作成した Upload preset の名前（Unsigned にしたやつ）
+
+  // Cloudinary のアップロードURL
+  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+  // 送信するデータ
+  const formData = new FormData();
+  formData.append("file", file);                 // 実際の画像ファイル
+  formData.append("upload_preset", uploadPreset);
+  formData.append("public_id", code);            // B00001 などのコード名で保存
+  formData.append("folder", "karts-artworks");   // Cloudinary 内のフォルダ名（好きな名前でOK）
+
+  // Cloudinary へアップロード
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error("Cloudinary へのアップロードに失敗しました");
+  }
+
+  const data = await res.json();
+
+  // data.secure_url が、画像のURL（https://〜）
+  return data.secure_url;
 }
 
 /* -------------------- ログイン処理 -------------------- */
@@ -124,7 +150,7 @@ async function setupArtScreen() {
   document.getElementById("art-save-message").textContent = "";
 }
 
-// 画像ファイル選択 → Storage へアップロード（＋プレビュー）
+// 画像ファイル選択 → Cloudinary へアップロード（＋プレビュー）
 async function handleImageChange(e) {
   const file = e.target.files[0];
   const imagePreview = document.getElementById("art-image-preview");
@@ -145,12 +171,12 @@ async function handleImageChange(e) {
     };
     reader.readAsDataURL(file);
 
-    // Firebase Storage にアップロード
+    // Cloudinary にアップロード
     const url = await uploadArtworkImage(currentCode, file);
     currentImageUrl = url;
 
     saveMsg.textContent =
-      "画像をアップロードしました。『作品を保存する』ボタンで確定します。";
+      "画像をアップロードしました。「作品を保存する」で確定します。";
     setTimeout(() => (saveMsg.textContent = ""), 2500);
   } catch (err) {
     console.error(err);
