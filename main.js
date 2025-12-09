@@ -1,6 +1,12 @@
 // main.js
 
-// Firestore コレクション名
+// ================== Cloudinary の設定 ==================
+const CLOUD_NAME = "drfgen4gm";        // ダッシュボードに出ている Cloud name
+const UPLOAD_PRESET = "karts_unsigned"; // 作った Upload preset 名（Unsigned のやつ）
+// ↑ preset 名が違う場合はここだけ自分の名前に変える
+
+
+// ================== Firestore コレクション名 ==================
 const COLLECTIONS = {
   artworks: "artworks", // A/B お客さんの作品
   surveys: "surveys",   // C のアンケート結果
@@ -9,7 +15,6 @@ const COLLECTIONS = {
 let currentCode = null;      // 例: "A00001"
 let currentType = null;      // "A" | "B" | "C"
 let currentImageUrl = null;  // 画像のURL（Cloudinary）
-
 
 // 画面切替
 function showScreen(screenId) {
@@ -61,21 +66,15 @@ async function resetSurveysOnServer() {
 
 // Cloudinary に画像をアップロードして URL を返す
 async function uploadArtworkImage(code, file) {
-  // ★ Cloudinary の設定（自分の値に合わせてね）
-  const cloudName = "drfgen4gm";     // ダッシュボードに出ている Cloud name
-  const uploadPreset = "unsigned";   // 作成した Upload preset の名前（Unsigned にしたやつ）
-
   // Cloudinary のアップロードURL
-  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+  const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
-  // 送信するデータ
   const formData = new FormData();
   formData.append("file", file);                 // 実際の画像ファイル
-  formData.append("upload_preset", uploadPreset);
+  formData.append("upload_preset", UPLOAD_PRESET);
   formData.append("public_id", code);            // B00001 などのコード名で保存
-  formData.append("folder", "karts-artworks");   // Cloudinary 内のフォルダ名（好きな名前でOK）
+  formData.append("folder", "karts-artworks");   // Cloudinary 内のフォルダ名（好きに変えてOK）
 
-  // Cloudinary へアップロード
   const res = await fetch(url, {
     method: "POST",
     body: formData,
@@ -86,9 +85,7 @@ async function uploadArtworkImage(code, file) {
   }
 
   const data = await res.json();
-
-  // data.secure_url が、画像のURL（https://〜）
-  return data.secure_url;
+  return data.secure_url; // 画像の URL (https://〜)
 }
 
 /* -------------------- ログイン処理 -------------------- */
@@ -362,15 +359,17 @@ async function handleSurveyReset() {
   }
 
   try {
-    await resetSurveysOnServer();
-    await renderSurveyData();
-    msg.textContent = "アンケート結果をすべて削除しました。";
-    setTimeout(() => (msg.textContent = ""), 2500);
+    await resetSurveysFromServer();
   } catch (err) {
     console.error(err);
     msg.textContent =
       "削除に失敗しました。時間をおいて再度お試しください。";
+    return;
   }
+
+  await renderSurveyData();
+  msg.textContent = "アンケート結果をすべて削除しました。";
+  setTimeout(() => (msg.textContent = ""), 2500);
 }
 
 /* -------------------- 共通 -------------------- */
