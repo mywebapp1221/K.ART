@@ -197,7 +197,7 @@ async function handleSaveArt() {
 
   try {
     await saveArtworkToServer(currentCode, {
-      imageUrl: currentImageUrl || null,
+      imageUrl: currentImageUrl || null,   // ★ URL だけ
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
     });
@@ -386,7 +386,7 @@ async function handleSurveyReset() {
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;/")
+    .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
