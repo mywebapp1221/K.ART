@@ -1,41 +1,40 @@
 // main.js
 
-// ================== Cloudinary の設定 ==================
-const CLOUD_NAME = "drfgen4gm";        // ダッシュボードに出ている Cloud name
-const UPLOAD_PRESET = "karts_unsigned"; // 作った Upload preset 名（Unsigned のやつ）
-// ↑ preset 名が違う場合はここだけ自分の名前に変える
-
-
-// ================== Firestore コレクション名 ==================
+// ---------- Firestore コレクション名 ----------
 const COLLECTIONS = {
   artworks: "artworks", // A/B お客さんの作品
   surveys: "surveys",   // C のアンケート結果
 };
 
-let currentCode = null;      // 例: "A00001"
-let currentType = null;      // "A" | "B" | "C"
-let currentImageUrl = null;  // 画像のURL（Cloudinary）
+// ---------- Cloudinary 設定（自分の値にする） ----------
+const cloudName = "drfgen4gm";        // ダッシュボードに出てる Cloud name
+const uploadPreset = "karts_unsigned"; // 自分が作った「Unsigned」preset名に合わせる
 
-// 画面切替
+let currentCode = null;        // 例: "A00001" / "B00001"
+let currentType = null;        // "A" | "B" | "C"
+let currentArtworkId = null;   // 例: "00001" ← 数字5ケタだけ。A/B で共通
+let currentImageUrl = null;    // 画像URL（Cloudinary）
+
+// ---------- 画面切替 ----------
 function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
   const target = document.getElementById(screenId);
   if (target) target.classList.add("active");
 }
 
-/* -------------------- Firestore 関連 -------------------- */
+/* ==================== Firestore 関連 ==================== */
 
 // 作品を Firestore から取得
-async function loadArtworkFromServer(code) {
-  const docRef = db.collection(COLLECTIONS.artworks).doc(code);
+async function loadArtworkFromServer(artworkId) {
+  const docRef = db.collection(COLLECTIONS.artworks).doc(artworkId);
   const snap = await docRef.get();
   if (!snap.exists) return null;
   return snap.data();
 }
 
 // 作品を Firestore に保存
-async function saveArtworkToServer(code, data) {
-  const docRef = db.collection(COLLECTIONS.artworks).doc(code);
+async function saveArtworkToServer(artworkId, data) {
+  const docRef = db.collection(COLLECTIONS.artworks).doc(artworkId);
   await docRef.set(data, { merge: true });
 }
 
@@ -62,18 +61,18 @@ async function resetSurveysOnServer() {
   await batch.commit();
 }
 
-/* -------------------- 画像アップロード（Cloudinary） -------------------- */
+/* ==================== 画像アップロード（Cloudinary） ==================== */
 
 // Cloudinary に画像をアップロードして URL を返す
-async function uploadArtworkImage(code, file) {
+async function uploadArtworkImage(artworkId, file) {
   // Cloudinary のアップロードURL
-  const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
   const formData = new FormData();
-  formData.append("file", file);                 // 実際の画像ファイル
-  formData.append("upload_preset", UPLOAD_PRESET);
-  formData.append("public_id", code);            // B00001 などのコード名で保存
-  formData.append("folder", "karts-artworks");   // Cloudinary 内のフォルダ名（好きに変えてOK）
+  formData.append("file", file);                  // 実際の画像ファイル
+  formData.append("upload_preset", uploadPreset); // Unsigned preset
+  formData.append("public_id", artworkId);        // 例: "00001"
+  formData.append("folder", "karts-artworks");    // Cloudinary 内のフォルダ名（任意）
 
   const res = await fetch(url, {
     method: "POST",
@@ -85,10 +84,10 @@ async function uploadArtworkImage(code, file) {
   }
 
   const data = await res.json();
-  return data.secure_url; // 画像の URL (https://〜)
+  return data.secure_url; // 画像URL (https://〜)
 }
 
-/* -------------------- ログイン処理 -------------------- */
+/* ==================== ログイン処理 ==================== */
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -103,8 +102,9 @@ async function handleLogin(e) {
     return;
   }
 
-  currentCode = raw;
-  currentType = raw.charAt(0);
+  currentCode = raw;            // "A00001" / "B00001"
+  currentType = raw.charAt(0);  // "A" / "B" / "C"
+  currentArtworkId = raw.slice(1); // "00001" ← ★ここがポイント（A/B共通ID）
   error.textContent = "";
 
   if (currentType === "A" || currentType === "B") {
@@ -116,7 +116,7 @@ async function handleLogin(e) {
   }
 }
 
-/* -------------------- A / B 作品画面 -------------------- */
+/* ==================== A / B 作品画面 ==================== */
 
 async function setupArtScreen() {
   const title = document.getElementById("art-title");
@@ -125,10 +125,11 @@ async function setupArtScreen() {
   const imagePreview = document.getElementById("art-image-preview");
   const imagePlaceholder = document.getElementById("art-image-placeholder");
 
+  // 画面タイトルはログインコードそのままを表示
   title.textContent = currentCode + " さんの作品ページ";
 
-  // Firestore から読み込み
-  const data = await loadArtworkFromServer(currentCode);
+  // Firestore から読み込み（A/B共通IDを使う）
+  const data = await loadArtworkFromServer(currentArtworkId);
 
   if (data && data.imageUrl) {
     currentImageUrl = data.imageUrl;
@@ -154,7 +155,7 @@ async function handleImageChange(e) {
   const imagePlaceholder = document.getElementById("art-image-placeholder");
   const saveMsg = document.getElementById("art-save-message");
 
-  if (!file || !currentCode) return;
+  if (!file || !currentArtworkId) return;
 
   saveMsg.textContent = "画像をアップロード中です…";
 
@@ -168,8 +169,8 @@ async function handleImageChange(e) {
     };
     reader.readAsDataURL(file);
 
-    // Cloudinary にアップロード
-    const url = await uploadArtworkImage(currentCode, file);
+    // Cloudinary にアップロード（A/B共通IDを使う）
+    const url = await uploadArtworkImage(currentArtworkId, file);
     currentImageUrl = url;
 
     saveMsg.textContent =
@@ -184,12 +185,12 @@ async function handleImageChange(e) {
 
 // コメント＋画像URL を Firestore に保存
 async function handleSaveArt() {
-  if (!currentCode) return;
+  if (!currentArtworkId) return;
   const commentInput = document.getElementById("art-comment");
   const saveMsg = document.getElementById("art-save-message");
 
   try {
-    await saveArtworkToServer(currentCode, {
+    await saveArtworkToServer(currentArtworkId, {
       imageUrl: currentImageUrl || null,
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
@@ -209,7 +210,7 @@ function handleCommentInput(e) {
   countSpan.textContent = e.target.value.length.toString();
 }
 
-/* -------------------- C 管理画面（アンケート） -------------------- */
+/* ==================== C 管理画面（アンケート） ==================== */
 
 async function setupAdminScreen() {
   document.getElementById("survey-save-message").textContent = "";
@@ -359,20 +360,18 @@ async function handleSurveyReset() {
   }
 
   try {
-    await resetSurveysFromServer();
+    await resetSurveysOnServer();
+    await renderSurveyData();
+    msg.textContent = "アンケート結果をすべて削除しました。";
+    setTimeout(() => (msg.textContent = ""), 2500);
   } catch (err) {
     console.error(err);
     msg.textContent =
       "削除に失敗しました。時間をおいて再度お試しください。";
-    return;
   }
-
-  await renderSurveyData();
-  msg.textContent = "アンケート結果をすべて削除しました。";
-  setTimeout(() => (msg.textContent = ""), 2500);
 }
 
-/* -------------------- 共通 -------------------- */
+/* ==================== 共通 ==================== */
 
 function escapeHtml(str) {
   return String(str)
@@ -386,6 +385,7 @@ function escapeHtml(str) {
 function logout() {
   currentCode = null;
   currentType = null;
+  currentArtworkId = null;
   currentImageUrl = null;
   document.getElementById("login-code").value = "";
   document.getElementById("login-error").textContent = "";
