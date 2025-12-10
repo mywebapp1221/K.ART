@@ -1,8 +1,8 @@
 // ==================== Firestore コレクション名 ====================
 const COLLECTIONS = {
-  artworks: "artworks",   // M / B の作品
-  surveys: "surveys",     // E のアンケート結果
-  bPasswords: "bPasswords", // Bユーザー用ログインパスワード
+  artworks: "artworks",      // M / B の作品
+  surveys: "surveys",        // E のアンケート結果
+  bPasswords: "b_passwords", // Bユーザー用パスワード
 };
 
 // ==================== Cloudinary 設定 ====================
@@ -19,7 +19,8 @@ function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach((s) =>
     s.classList.remove("active")
   );
-  document.getElementById(screenId).classList.add("active");
+  const el = document.getElementById(screenId);
+  if (el) el.classList.add("active");
 }
 
 /* =================================================================
@@ -61,18 +62,37 @@ async function resetSurveysOnServer() {
   await batch.commit();
 }
 
-// ===== Bユーザー用パスワード保存／取得 =====
-async function setBPasswordOnServer(code, password) {
-  const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
-  await docRef.set({ password: String(password) }, { merge: true });
-}
-
-async function getBPasswordFromServer(code) {
+// Bユーザー用パスワード取得
+async function loadBPasswordFromServer(code) {
   const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
   const snap = await docRef.get();
-  if (!snap.exists) return null;
-  const data = snap.data() || {};
-  return data.password ? String(data.password) : null;
+  return snap.exists ? snap.data() : null;
+}
+
+// Bユーザー用パスワード保存
+async function saveBPasswordToServer(code, password) {
+  const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
+  await docRef.set(
+    {
+      password,
+      updatedAt: firebase.firestore.Timestamp.now(),
+    },
+    { merge: true }
+  );
+}
+
+// 「みんなの作品」用に、M作品の featured を最大8件取得
+async function loadFeaturedArtworksFromServer() {
+  const snap = await db
+    .collection(COLLECTIONS.artworks)
+    .orderBy("featuredAt", "desc")
+    .limit(30) // とりあえず30件取って、Mだけに絞る
+    .get();
+
+  return snap.docs
+    .map((doc) => ({ code: doc.id, ...doc.data() }))
+    .filter((a) => a.codeType === "M" && a.featuredAt)
+    .slice(0, 8);
 }
 
 /* =================================================================
@@ -123,7 +143,7 @@ async function handleLogin(e) {
 
   const head = rawCode.charAt(0); // "M" / "B" / "E"
 
-  // ---- M / E のパスワード（共通：1221）----
+  // --- M / E は共通パスワード 1221 ---
   if (head === "M" || head === "E") {
     if (password !== "1221") {
       error.textContent = "パスワードが正しくありません。";
@@ -131,23 +151,27 @@ async function handleLogin(e) {
     }
   }
 
-  // ---- Bユーザーのパスワードチェック（個別 4桁）----
+  // --- B はコードごとの4桁パスワード ---
   if (head === "B") {
-    if (!/^[0-9]{4}$/.test(password)) {
-      error.textContent = "パスワード（4桁）を入力してください。";
+    if (!password) {
+      error.textContent = "パスワードを入力してください。";
       return;
     }
-
-    const saved = await getBPasswordFromServer(rawCode);
-
-    if (!saved) {
+    try {
+      const info = await loadBPasswordFromServer(rawCode);
+      if (!info || !info.password) {
+        error.textContent =
+          "このコードのパスワードはまだ設定されていません。スタッフに確認してください。";
+        return;
+      }
+      if (info.password !== password) {
+        error.textContent = "パスワードが正しくありません。";
+        return;
+      }
+    } catch (err) {
+      console.error(err);
       error.textContent =
-        "このコードのパスワードがまだ設定されていません。スタッフにお声がけください。";
-      return;
-    }
-
-    if (password !== saved) {
-      error.textContent = "パスワードが違います。";
+        "ログインに失敗しました。時間をおいて再度お試しください。";
       return;
     }
   }
@@ -157,6 +181,8 @@ async function handleLogin(e) {
   currentType = head;
   currentImageUrl = null;
   error.textContent = "";
+  codeInput.value = "";
+  passInput.value = "";
 
   if (head === "M" || head === "B") {
     await setupArtScreen();
@@ -183,7 +209,7 @@ async function setupArtScreen() {
   title.textContent = `${currentCode} さんの作品ページ`;
   msg.textContent = "";
 
-  // M の人だけ「入れ替える」ボタンを出す
+  // M のときだけ「入れ替える」ボタン表示
   if (currentType === "M") {
     featureBtn.classList.remove("hidden");
   } else {
@@ -235,7 +261,7 @@ async function handleImageChange(e) {
     await saveArtworkToServer(currentCode, {
       imageUrl,
       publicId,
-      type: currentType, // M or B を保存
+      codeType: currentType, // M / B
       updatedAt: new Date().toISOString(),
     });
 
@@ -258,7 +284,7 @@ async function handleSaveArt() {
     await saveArtworkToServer(currentCode, {
       imageUrl: currentImageUrl || null,
       comment,
-      type: currentType,
+      codeType: currentType,
       updatedAt: new Date().toISOString(),
     });
 
@@ -310,43 +336,37 @@ async function handleDeleteImage() {
     console.error(err);
     msg.textContent = "削除に失敗しました。";
   }
+
+  // Cloudinary 内の実ファイルはコンソールから手動削除する想定
 }
 
-// ★ Mユーザー専用：この作品をトップページの「みんなの作品」に反映
+// M の人専用：「みんなの作品」に載せる
 async function handleFeatureArt() {
+  if (!currentCode || currentType !== "M") return;
+
   const msg = document.getElementById("art-save-message");
+  const comment = document.getElementById("art-comment").value.trim();
 
-  if (currentType !== "M") {
-    msg.textContent = "M から始まるコードの方のみ利用できます。";
+  if (!currentImageUrl && !comment) {
+    msg.textContent = "写真か解説のどちらかは入力してください。";
     setTimeout(() => (msg.textContent = ""), 2500);
-    return;
-  }
-
-  const artwork = await loadArtworkFromServer(currentCode);
-  const imageUrl = artwork?.imageUrl || currentImageUrl;
-  const comment =
-    artwork?.comment ||
-    document.getElementById("art-comment").value.trim();
-
-  if (!imageUrl || !comment) {
-    msg.textContent = "画像と文章を保存してから「入れ替える」を押してください。";
-    setTimeout(() => (msg.textContent = ""), 3000);
     return;
   }
 
   try {
     await saveArtworkToServer(currentCode, {
-      type: "M",
-      featuredAt: Date.now(),
+      codeType: currentType,
+      featured: true,
+      featuredAt: firebase.firestore.Timestamp.now(),
     });
 
-    msg.textContent = "みんなの作品を入れ替えました。";
-    setTimeout(() => (msg.textContent = ""), 2500);
-
-    await renderFeaturedOnLogin();
+    msg.textContent =
+      "トップページの「みんなの作品」に反映されました。（反映まで数秒かかる場合があります）";
+    setTimeout(() => (msg.textContent = ""), 3500);
   } catch (err) {
     console.error(err);
-    msg.textContent = "入れ替えに失敗しました。";
+    msg.textContent =
+      "反映に失敗しました。時間をおいて再試行してください。";
   }
 }
 
@@ -358,13 +378,13 @@ async function setupAdminScreen() {
   document.getElementById("survey-save-message").textContent = "";
   document.getElementById("survey-reset-message").textContent = "";
 
-  // E00002 のときだけ Bパスワードカードを表示
-  const bCard = document.getElementById("bpassword-card");
-  if (bCard) {
+  // E00002 のときだけ Bパスワード設定カードを表示
+  const card = document.getElementById("bpassword-card");
+  if (card) {
     if (currentCode === "E00002") {
-      bCard.classList.remove("hidden");
+      card.classList.remove("hidden");
     } else {
-      bCard.classList.add("hidden");
+      card.classList.add("hidden");
     }
   }
 
@@ -476,7 +496,7 @@ async function handleSurveyReset() {
   }
 }
 
-// Bユーザー用パスワード設定フォーム
+// Bユーザー用パスワード設定（E00002専用）
 async function handleBPasswordSubmit(e) {
   e.preventDefault();
 
@@ -484,90 +504,96 @@ async function handleBPasswordSubmit(e) {
   const passInput = document.getElementById("b-pass");
   const msg = document.getElementById("bpassword-message");
 
-  const codeRaw = (codeInput.value || "").trim().toUpperCase();
-  const passRaw = (passInput.value || "").trim();
+  const code = (codeInput.value || "").trim().toUpperCase();
+  const pass = (passInput.value || "").trim();
 
-  const pattern = /^B[0-9]{5}$/;
-  if (!pattern.test(codeRaw)) {
-    msg.textContent = "「B00001」のように B + 5桁の数字で入力してください。";
+  const codePattern = /^B[0-9]{5}$/;
+  const passPattern = /^[0-9]{4}$/;
+
+  if (!codePattern.test(code)) {
+    msg.textContent = "コードは B00001 のように入力してください。";
     return;
   }
-  if (!/^[0-9]{4}$/.test(passRaw)) {
-    msg.textContent = "4桁の数字でパスワードを入力してください。";
+  if (!passPattern.test(pass)) {
+    msg.textContent = "パスワードは4桁の数字で入力してください。";
     return;
   }
 
   try {
-    await setBPasswordOnServer(codeRaw, passRaw);
-    msg.textContent = `${codeRaw} のパスワードを保存しました。`;
+    await saveBPasswordToServer(code, pass);
+    msg.textContent = `コード ${code} のパスワードを設定しました。`;
     setTimeout(() => (msg.textContent = ""), 2500);
 
     codeInput.value = "";
     passInput.value = "";
   } catch (err) {
     console.error(err);
-    msg.textContent =
-      "保存に失敗しました。時間をおいて再度お試しください。";
+    msg.textContent = "保存に失敗しました。時間をおいて再試行してください。";
   }
 }
 
 /* =================================================================
-   ログイン画面の「みんなの作品」表示
+   トップページ「みんなの作品」
    ================================================================= */
 
-async function renderFeaturedOnLogin() {
+async function renderFeaturedArtworks() {
   const container = document.getElementById("featured-container");
   if (!container) return;
 
+  container.innerHTML = "";
+
   try {
-    const snap = await db
-      .collection(COLLECTIONS.artworks)
-      .orderBy("featuredAt", "desc")
-      .limit(30)
-      .get();
+    const artworks = await loadFeaturedArtworksFromServer();
 
-    let items = snap.docs.map((doc) => {
-      const data = doc.data() || {};
-      return {
-        code: doc.id,
-        imageUrl: data.imageUrl,
-        comment: data.comment || "",
-        type: data.type || "",
-        featuredAt: data.featuredAt || null,
-      };
-    });
-
-    items = items
-      .filter((it) => it.type === "M" && it.imageUrl && it.featuredAt)
-      .slice(0, 8);
-
-    if (!items.length) {
+    if (!artworks.length) {
       container.innerHTML =
-        '<p class="featured-placeholder">まだ作品は表示されていません。</p>';
+        "<p style='font-size:13px;color:#9ca3af;text-align:center;'>まだ作品が選ばれていません。</p>";
       return;
     }
 
-    container.innerHTML = `
-      <div class="featured-grid">
-        ${items
-          .map(
-            (s) => `
-              <article class="featured-item">
-                <div class="featured-img-wrap">
-                  <img src="${s.imageUrl}" alt="作品画像" class="featured-img" />
-                </div>
-                <p class="featured-comment">${escapeHtml(s.comment || "")}</p>
-                <p class="featured-code">コード：${escapeHtml(s.code || "")}</p>
-              </article>
-            `
-          )
-          .join("")}
-      </div>
-    `;
+    const grid = document.createElement("div");
+    grid.className = "featured-grid";
+
+    artworks.forEach((a) => {
+      const item = document.createElement("div");
+      item.className = "featured-item";
+
+      const imgWrap = document.createElement("div");
+      imgWrap.className = "featured-img-wrap";
+
+      if (a.imageUrl) {
+        const img = document.createElement("img");
+        img.className = "featured-img";
+        img.src = a.imageUrl;
+        img.alt = a.code || "";
+        imgWrap.appendChild(img);
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "featured-placeholder";
+        ph.textContent = "画像はまだ登録されていません";
+        imgWrap.appendChild(ph);
+      }
+
+      const commentDiv = document.createElement("div");
+      commentDiv.className = "featured-comment";
+      commentDiv.textContent = a.comment || "";
+
+      const codeDiv = document.createElement("div");
+      codeDiv.className = "featured-code";
+      codeDiv.textContent = a.code || "";
+
+      item.appendChild(imgWrap);
+      item.appendChild(commentDiv);
+      item.appendChild(codeDiv);
+
+      grid.appendChild(item);
+    });
+
+    container.appendChild(grid);
   } catch (err) {
     console.error(err);
     container.innerHTML =
-      '<p class="featured-placeholder">作品の読み込みに失敗しました。</p>';
+      "<p style='font-size:13px;color:#b91c1c;text-align:center;'>作品の読み込みに失敗しました。</p>";
   }
 }
 
@@ -598,9 +624,9 @@ function logout() {
   if (error) error.textContent = "";
 
   showScreen("login-screen");
-  renderFeaturedOnLogin();
 }
 
+// 初期化
 function init() {
   // ログイン
   document
@@ -650,8 +676,8 @@ function init() {
     bForm.addEventListener("submit", handleBPasswordSubmit);
   }
 
-  // 最初のトップページの作品表示
-  renderFeaturedOnLogin();
+  // トップページ「みんなの作品」を読み込み
+  renderFeaturedArtworks();
 }
 
 document.addEventListener("DOMContentLoaded", init);
