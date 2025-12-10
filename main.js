@@ -1,26 +1,25 @@
 // ==================== Firestore コレクション名 ====================
 const COLLECTIONS = {
-  artworks: "artworks",      // M / B の作品
-  surveys: "surveys",        // E のアンケート結果
-  bPasswords: "b_passwords", // Bユーザー用パスワード
+  artworks: "artworks",    // M / B の作品
+  surveys: "surveys",      // アンケート
+  bPasswords: "bpasswords" // Bユーザー用パスワード
 };
 
 // ==================== Cloudinary 設定 ====================
-const cloudName = "drfgen4gm";         // Cloud name
-const uploadPreset = "karts_unsigned"; // Unsigned upload preset 名
+const cloudName = "drfgen4gm";
+const uploadPreset = "karts_unsigned";
 
-// ==================== 状態管理用の変数 ====================
-let currentCode = null;
+// ==================== 状態管理用 ====================
+let currentCode = null;      // 例: "M00001"
 let currentType = null;      // "M" | "B" | "E"
-let currentImageUrl = null;  // Firestore に保存されている URL
+let currentImageUrl = null;  // 現在の作品画像URL（Firestore保存用）
 
-// ==================== 画面切り替え ====================
+// 画面切り替え
 function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach((s) =>
     s.classList.remove("active")
   );
-  const el = document.getElementById(screenId);
-  if (el) el.classList.add("active");
+  document.getElementById(screenId).classList.add("active");
 }
 
 /* =================================================================
@@ -34,18 +33,22 @@ async function loadArtworkFromServer(code) {
   return snap.exists ? snap.data() : null;
 }
 
-// 作品保存
+// 作品保存（code / head も必ず入れておく）
 async function saveArtworkToServer(code, data) {
   const docRef = db.collection(COLLECTIONS.artworks).doc(code);
+  await docRef.set(
+    {
+      code,                // 便利用
+      head: code.charAt(0) // "M" / "B" / "E"
+    },
+    { merge: true }
+  );
   await docRef.set(data, { merge: true });
 }
 
 // アンケート読み込み
 async function loadSurveysFromServer() {
-  const snap = await db
-    .collection(COLLECTIONS.surveys)
-    .orderBy("createdAt")
-    .get();
+  const snap = await db.collection(COLLECTIONS.surveys).orderBy("createdAt").get();
   return snap.docs.map((doc) => doc.data());
 }
 
@@ -63,36 +66,20 @@ async function resetSurveysOnServer() {
 }
 
 // Bユーザー用パスワード取得
-async function loadBPasswordFromServer(code) {
+async function getBPassword(code) {
   const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
   const snap = await docRef.get();
-  return snap.exists ? snap.data() : null;
+  return snap.exists ? snap.data().password : null;
 }
 
 // Bユーザー用パスワード保存
-async function saveBPasswordToServer(code, password) {
+async function saveBPassword(code, password) {
   const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
-  await docRef.set(
-    {
-      password,
-      updatedAt: firebase.firestore.Timestamp.now(),
-    },
-    { merge: true }
-  );
-}
-
-// 「みんなの作品」用に、M作品の featured を最大8件取得
-async function loadFeaturedArtworksFromServer() {
-  const snap = await db
-    .collection(COLLECTIONS.artworks)
-    .orderBy("featuredAt", "desc")
-    .limit(30) // とりあえず30件取って、Mだけに絞る
-    .get();
-
-  return snap.docs
-    .map((doc) => ({ code: doc.id, ...doc.data() }))
-    .filter((a) => a.codeType === "M" && a.featuredAt)
-    .slice(0, 8);
+  await docRef.set({
+    code,
+    password,
+    updatedAt: firebase.firestore.Timestamp.now()
+  });
 }
 
 /* =================================================================
@@ -102,7 +89,6 @@ async function loadFeaturedArtworksFromServer() {
 async function uploadArtworkImage(code, file) {
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
-  // 毎回ユニークな public_id にする
   const publicId = `${code}_${Date.now()}`;
 
   const formData = new FormData();
@@ -112,7 +98,6 @@ async function uploadArtworkImage(code, file) {
   formData.append("public_id", publicId);
 
   const res = await fetch(url, { method: "POST", body: formData });
-
   if (!res.ok) throw new Error("Cloudinary アップロード失敗");
 
   const data = await res.json();
@@ -130,65 +115,55 @@ async function handleLogin(e) {
   const passInput = document.getElementById("login-password");
   const error = document.getElementById("login-error");
 
-  const rawCode = (codeInput.value || "").trim().toUpperCase();
+  const raw = (codeInput.value || "").trim().toUpperCase();
   const password = (passInput.value || "").trim();
 
-  // M / B / E + 5 桁数字
-  const pattern = /^[MBE][0-9]{5}$/;
-  if (!pattern.test(rawCode)) {
-    error.textContent =
-      "「B00001」のようにアルファベット1文字 + 5桁の数字で入力してください。";
+  // 1文字 + 5桁のみ許可（例: B00001）
+  const pattern = /^[A-Z][0-9]{5}$/;
+  if (!pattern.test(raw)) {
+    error.textContent = "「B00001」のようにアルファベット1文字 + 5桁の数字で入力してください。";
     return;
   }
 
-  const head = rawCode.charAt(0); // "M" / "B" / "E"
+  const head = raw.charAt(0); // "M" / "B" / "E"
 
-  // --- M / E は共通パスワード 1221 ---
+  // ---- パスワードチェック ----
   if (head === "M" || head === "E") {
+    // 共通パスワード
     if (password !== "1221") {
       error.textContent = "パスワードが正しくありません。";
       return;
     }
-  }
-
-  // --- B はコードごとの4桁パスワード ---
-  if (head === "B") {
-    if (!password) {
-      error.textContent = "パスワードを入力してください。";
+  } else if (head === "B") {
+    // Bユーザーは個別パスワード
+    if (password.length !== 4) {
+      error.textContent = "B の方は 4桁のパスワードを入力してください。";
       return;
     }
     try {
-      const info = await loadBPasswordFromServer(rawCode);
-      if (!info || !info.password) {
-        error.textContent =
-          "このコードのパスワードはまだ設定されていません。スタッフに確認してください。";
-        return;
-      }
-      if (info.password !== password) {
-        error.textContent = "パスワードが正しくありません。";
+      const bPass = await getBPassword(raw);
+      if (!bPass || bPass !== password) {
+        error.textContent = "Bユーザーのパスワードが正しくありません。";
         return;
       }
     } catch (err) {
       console.error(err);
-      error.textContent =
-        "ログインに失敗しました。時間をおいて再度お試しください。";
+      error.textContent = "パスワード確認中にエラーが発生しました。";
       return;
     }
   }
 
-  // ログイン成功
-  currentCode = rawCode;
+  // ---- ログイン成功 ----
+  currentCode = raw;
   currentType = head;
   currentImageUrl = null;
   error.textContent = "";
-  codeInput.value = "";
-  passInput.value = "";
 
   if (head === "M" || head === "B") {
     await setupArtScreen();
     showScreen("art-screen");
   } else if (head === "E") {
-    await setupAdminScreen();
+    await setupAdminScreen(raw); // コードごと渡す（E00001 / E00002 を判定に使う）
     showScreen("admin-screen");
   }
 }
@@ -209,7 +184,7 @@ async function setupArtScreen() {
   title.textContent = `${currentCode} さんの作品ページ`;
   msg.textContent = "";
 
-  // M のときだけ「入れ替える」ボタン表示
+  // 「入れ替える」ボタンは M の人の時だけ表示
   if (currentType === "M") {
     featureBtn.classList.remove("hidden");
   } else {
@@ -234,7 +209,7 @@ async function setupArtScreen() {
   count.textContent = commentInput.value.length.toString();
 }
 
-// 画像選択 → Cloudinary アップロード
+// 画像選択
 async function handleImageChange(e) {
   const file = e.target.files[0];
   if (!file || !currentCode) return;
@@ -245,7 +220,6 @@ async function handleImageChange(e) {
 
   msg.textContent = "画像アップロード中…";
 
-  // 先にローカルでプレビュー
   const reader = new FileReader();
   reader.onload = (ev) => {
     imagePreview.src = ev.target.result;
@@ -261,8 +235,7 @@ async function handleImageChange(e) {
     await saveArtworkToServer(currentCode, {
       imageUrl,
       publicId,
-      codeType: currentType, // M / B
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     msg.textContent = "画像を保存しました。";
@@ -273,7 +246,7 @@ async function handleImageChange(e) {
   }
 }
 
-// コメント保存（＋画像URLも一緒に保存）
+// コメント保存
 async function handleSaveArt() {
   if (!currentCode) return;
 
@@ -284,8 +257,7 @@ async function handleSaveArt() {
     await saveArtworkToServer(currentCode, {
       imageUrl: currentImageUrl || null,
       comment,
-      codeType: currentType,
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     msg.textContent = "保存しました。";
@@ -302,7 +274,7 @@ function handleCommentInput(e) {
     e.target.value.length.toString();
 }
 
-// 画像削除（サイト上＆Firestoreから）
+// 画像削除
 async function handleDeleteImage() {
   if (!currentCode) return;
 
@@ -322,7 +294,7 @@ async function handleDeleteImage() {
     await saveArtworkToServer(currentCode, {
       imageUrl: null,
       publicId: null,
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     currentImageUrl = null;
@@ -336,62 +308,131 @@ async function handleDeleteImage() {
     console.error(err);
     msg.textContent = "削除に失敗しました。";
   }
-
-  // Cloudinary 内の実ファイルはコンソールから手動削除する想定
 }
 
-// M の人専用：「みんなの作品」に載せる
+// 「入れ替える」ボタン：みんなの作品に反映（Mユーザーのみ）
 async function handleFeatureArt() {
   if (!currentCode || currentType !== "M") return;
 
   const msg = document.getElementById("art-save-message");
-  const comment = document.getElementById("art-comment").value.trim();
-
-  if (!currentImageUrl && !comment) {
-    msg.textContent = "写真か解説のどちらかは入力してください。";
-    setTimeout(() => (msg.textContent = ""), 2500);
-    return;
-  }
 
   try {
     await saveArtworkToServer(currentCode, {
-      codeType: currentType,
-      featured: true,
-      featuredAt: firebase.firestore.Timestamp.now(),
+      featuredAt: firebase.firestore.Timestamp.now()
     });
 
-    msg.textContent =
-      "トップページの「みんなの作品」に反映されました。（反映まで数秒かかる場合があります）";
-    setTimeout(() => (msg.textContent = ""), 3500);
+    msg.textContent = "トップの「みんなの作品」に反映されます。";
+    setTimeout(() => (msg.textContent = ""), 2500);
+
+    // トップページも更新
+    await renderFeaturedArtworks();
   } catch (err) {
     console.error(err);
-    msg.textContent =
-      "反映に失敗しました。時間をおいて再試行してください。";
+    msg.textContent = "反映に失敗しました。";
   }
 }
 
 /* =================================================================
-   E 管理画面（アンケート & Bパスワード）
+   トップページ「みんなの作品」（M だけ最大 8 件）
    ================================================================= */
 
-async function setupAdminScreen() {
+async function renderFeaturedArtworks() {
+  const container = document.getElementById("featured-container");
+  if (!container) return;
+
+  container.innerHTML = "読み込み中…";
+
+  try {
+    const snap = await db.collection(COLLECTIONS.artworks).get();
+    const all = snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        code: doc.id,
+        imageUrl: data.imageUrl,
+        comment: data.comment || "",
+        featuredAt: data.featuredAt
+      };
+    });
+
+    // M だけ & 画像あり
+    let list = all.filter(
+      (item) =>
+        item.code &&
+        item.code.startsWith("M") &&
+        item.imageUrl
+    );
+
+    // featuredAt が新しい順（なければ 0）
+    list.sort((a, b) => {
+      const ta =
+        a.featuredAt && a.featuredAt.toMillis
+          ? a.featuredAt.toMillis()
+          : 0;
+      const tb =
+        b.featuredAt && b.featuredAt.toMillis
+          ? b.featuredAt.toMillis()
+          : 0;
+      return tb - ta;
+    });
+
+    list = list.slice(0, 8); // 最大8件
+
+    if (!list.length) {
+      container.innerHTML = `
+        <div style="font-size:13px; color:#9ca3af; text-align:center; padding:8px;">
+          まだ作品が登録されていません。
+        </div>
+      `;
+      return;
+    }
+
+    const html = `
+      <div class="featured-grid">
+        ${list
+          .map(
+            (item) => `
+          <article class="featured-item">
+            <div class="featured-img-wrap">
+              <img src="${item.imageUrl}" alt="${item.code}" class="featured-img" />
+            </div>
+            <div class="featured-comment">${escapeHtml(item.comment || "")}</div>
+            <div class="featured-code">${item.code}</div>
+          </article>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML =
+      '<div style="font-size:13px; color:#b91c1c; text-align:center;">読み込みに失敗しました。</div>';
+  }
+}
+
+/* =================================================================
+   E 管理画面（アンケート & Bユーザー用パスワード設定）
+   ================================================================= */
+
+async function setupAdminScreen(adminCode) {
+  // アンケート用メッセージ初期化
   document.getElementById("survey-save-message").textContent = "";
   document.getElementById("survey-reset-message").textContent = "";
 
-  // E00002 のときだけ Bパスワード設定カードを表示
-  const card = document.getElementById("bpassword-card");
-  if (card) {
-    if (currentCode === "E00002") {
-      card.classList.remove("hidden");
-    } else {
-      card.classList.add("hidden");
-    }
+  // Bパスワードカードの表示 / 非表示
+  const bCard = document.getElementById("bpassword-card");
+  if (adminCode === "E00002") {
+    bCard.classList.remove("hidden");
+  } else {
+    bCard.classList.add("hidden");
   }
 
   await renderSurveyData();
 }
 
-// アンケート追加
+// アンケート送信
 async function handleSurveySubmit(e) {
   e.preventDefault();
 
@@ -410,7 +451,7 @@ async function handleSurveySubmit(e) {
       age,
       wallet,
       freeComment: free,
-      createdAt: firebase.firestore.Timestamp.now(),
+      createdAt: firebase.firestore.Timestamp.now()
     });
 
     msg.textContent = "アンケート結果を追加しました。";
@@ -425,7 +466,7 @@ async function handleSurveySubmit(e) {
   }
 }
 
-// アンケート表示
+// アンケート一覧 & 集計
 async function renderSurveyData() {
   const summaryDiv = document.getElementById("survey-summary");
   const listDiv = document.getElementById("survey-list");
@@ -465,7 +506,7 @@ async function renderSurveyData() {
     .join("");
 
   listDiv.innerHTML = `
-    <table>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
       <thead>
         <tr>
           <th>#</th>
@@ -496,7 +537,7 @@ async function handleSurveyReset() {
   }
 }
 
-// Bユーザー用パスワード設定（E00002専用）
+// Bユーザー用パスワード設定（E00002 のみ）
 async function handleBPasswordSubmit(e) {
   e.preventDefault();
 
@@ -505,95 +546,28 @@ async function handleBPasswordSubmit(e) {
   const msg = document.getElementById("bpassword-message");
 
   const code = (codeInput.value || "").trim().toUpperCase();
-  const pass = (passInput.value || "").trim();
+  const password = (passInput.value || "").trim();
 
-  const codePattern = /^B[0-9]{5}$/;
-  const passPattern = /^[0-9]{4}$/;
-
-  if (!codePattern.test(code)) {
-    msg.textContent = "コードは B00001 のように入力してください。";
+  const pattern = /^B[0-9]{5}$/;
+  if (!pattern.test(code)) {
+    msg.textContent = "コードは「B00001」の形式で入力してください。";
     return;
   }
-  if (!passPattern.test(pass)) {
-    msg.textContent = "パスワードは4桁の数字で入力してください。";
+  if (!/^[0-9]{4}$/.test(password)) {
+    msg.textContent = "パスワードは 4桁の数字で入力してください。";
     return;
   }
 
   try {
-    await saveBPasswordToServer(code, pass);
-    msg.textContent = `コード ${code} のパスワードを設定しました。`;
+    await saveBPassword(code, password);
+    msg.textContent = `コード ${code} のパスワードを保存しました。`;
     setTimeout(() => (msg.textContent = ""), 2500);
 
     codeInput.value = "";
     passInput.value = "";
   } catch (err) {
     console.error(err);
-    msg.textContent = "保存に失敗しました。時間をおいて再試行してください。";
-  }
-}
-
-/* =================================================================
-   トップページ「みんなの作品」
-   ================================================================= */
-
-async function renderFeaturedArtworks() {
-  const container = document.getElementById("featured-container");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  try {
-    const artworks = await loadFeaturedArtworksFromServer();
-
-    if (!artworks.length) {
-      container.innerHTML =
-        "<p style='font-size:13px;color:#9ca3af;text-align:center;'>まだ作品が選ばれていません。</p>";
-      return;
-    }
-
-    const grid = document.createElement("div");
-    grid.className = "featured-grid";
-
-    artworks.forEach((a) => {
-      const item = document.createElement("div");
-      item.className = "featured-item";
-
-      const imgWrap = document.createElement("div");
-      imgWrap.className = "featured-img-wrap";
-
-      if (a.imageUrl) {
-        const img = document.createElement("img");
-        img.className = "featured-img";
-        img.src = a.imageUrl;
-        img.alt = a.code || "";
-        imgWrap.appendChild(img);
-      } else {
-        const ph = document.createElement("div");
-        ph.className = "featured-placeholder";
-        ph.textContent = "画像はまだ登録されていません";
-        imgWrap.appendChild(ph);
-      }
-
-      const commentDiv = document.createElement("div");
-      commentDiv.className = "featured-comment";
-      commentDiv.textContent = a.comment || "";
-
-      const codeDiv = document.createElement("div");
-      codeDiv.className = "featured-code";
-      codeDiv.textContent = a.code || "";
-
-      item.appendChild(imgWrap);
-      item.appendChild(commentDiv);
-      item.appendChild(codeDiv);
-
-      grid.appendChild(item);
-    });
-
-    container.appendChild(grid);
-  } catch (err) {
-    console.error(err);
-    container.innerHTML =
-      "<p style='font-size:13px;color:#b91c1c;text-align:center;'>作品の読み込みに失敗しました。</p>";
+    msg.textContent = "保存に失敗しました。";
   }
 }
 
@@ -626,7 +600,6 @@ function logout() {
   showScreen("login-screen");
 }
 
-// 初期化
 function init() {
   // ログイン
   document
@@ -671,12 +644,11 @@ function init() {
     .getElementById("logout-admin")
     .addEventListener("click", logout);
 
-  const bForm = document.getElementById("bpassword-form");
-  if (bForm) {
-    bForm.addEventListener("submit", handleBPasswordSubmit);
-  }
+  document
+    .getElementById("bpassword-form")
+    .addEventListener("submit", handleBPasswordSubmit);
 
-  // トップページ「みんなの作品」を読み込み
+  // トップページ「みんなの作品」を初期表示
   renderFeaturedArtworks();
 }
 

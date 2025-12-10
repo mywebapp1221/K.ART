@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html>  
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -142,13 +142,6 @@
       margin-top: 4px;
     }
 
-    .note {
-      font-size: 12px;
-      color: #6b7280;
-      line-height: 1.6;
-      margin-top: 4px;
-    }
-
     /* ▼ トップページの「みんなの作品」用 ▼ */
     .featured-section {
       max-width: 900px;
@@ -247,7 +240,7 @@
           required
         />
 
-        <!-- パスワード（M/E 必須・B は空でOK） -->
+        <!-- M / E / B 用パスワード欄（Bは個別設定） -->
         <label for="login-password">パスワード</label>
         <input
           type="password"
@@ -323,17 +316,16 @@
         <button id="logout-admin" class="btn secondary small">ログアウト</button>
       </header>
 
-      <!-- アンケート入力 -->
       <div class="card">
         <h3>アンケート結果の入力</h3>
         <form id="survey-form">
-          <label for="age">年齢</label>
+          <label>年齢</label>
           <input id="age" type="number" min="0" max="120" required />
 
-          <label for="wallet">財布の中身（円）</label>
+          <label>財布の中身（円）</label>
           <input id="wallet" type="number" min="0" step="100" required />
 
-          <label for="free-comment">自由な意見</label>
+          <label>自由な意見</label>
           <textarea id="free-comment" rows="3"></textarea>
 
           <button class="btn primary wide" type="submit">追加</button>
@@ -341,57 +333,52 @@
         <p id="survey-save-message" class="info-message"></p>
       </div>
 
-      <!-- アンケート集計 -->
       <div class="card">
         <h3>アンケート集計</h3>
         <div id="survey-summary"></div>
         <div id="age-chart"></div>
       </div>
 
-      <!-- アンケート一覧 -->
       <div class="card">
         <h3>アンケート一覧</h3>
         <div id="survey-list"></div>
       </div>
 
-      <!-- アンケートのリセット -->
       <div class="card">
         <h3>アンケートのリセット</h3>
         <button id="reset-survey" class="btn danger wide">全削除</button>
         <p id="survey-reset-message" class="info-message"></p>
       </div>
 
-      <!-- ★ E00002 専用：Bユーザー用ログインパスワード設定カード -->
-      <div id="bpassword-card" class="card hidden">
+      <!-- ▼▼▼ Bユーザー用パスワード設定（E00002 のときだけ表示） ▼▼▼ -->
+      <div class="card hidden" id="bpassword-card">
         <h3>Bユーザー用ログインパスワード設定</h3>
-        <p class="note">
-          Bから始まるお客様コードごとに、4桁のパスワードを設定できます。<br>
-          例）コード「B00001」 パスワード「3432」
+        <p style="font-size:12px; color:#6b7280; margin-top:0; margin-bottom:12px;">
+          B から始まるコードのお客様に、それぞれ専用の4桁パスワードを設定できます。
         </p>
 
         <form id="bpassword-form">
           <label for="b-code">コード（B00001 など）</label>
           <input
-            id="b-code"
             type="text"
+            id="b-code"
             maxlength="6"
-            placeholder="B00001"
             autocomplete="off"
-            required
+            placeholder="B00001"
           />
 
-          <label for="b-pass">パスワード（4桁の数字）</label>
+          <label for="b-pass">パスワード（4桁）</label>
           <input
+            type="text"
             id="b-pass"
-            type="password"
             maxlength="4"
-            placeholder="例）3432"
+            inputmode="numeric"
             autocomplete="off"
-            required
+            placeholder="例）1234"
           />
 
           <button type="submit" class="btn primary wide">
-            Bユーザーのパスワードを設定
+            パスワードを保存
           </button>
         </form>
 
