@@ -4,6 +4,10 @@ const COLLECTIONS = {
   surveys: "surveys",   // E のアンケート結果
 };
 
+// トップページ用の featured コレクション
+const FEATURED_COLLECTION = "featured";
+const FEATURED_DOC_ID = "home";
+
 // ==================== Cloudinary 設定 ====================
 const cloudName = "drfgen4gm";         // Cloud name
 const uploadPreset = "karts_unsigned"; // Unsigned upload preset 名
@@ -58,6 +62,19 @@ async function resetSurveysOnServer() {
   const batch = db.batch();
   snap.forEach((d) => batch.delete(d.ref));
   await batch.commit();
+}
+
+// トップページ用 featured 読み込み
+async function loadFeaturedFromServer() {
+  const ref = db.collection(FEATURED_COLLECTION).doc(FEATURED_DOC_ID);
+  const snap = await ref.get();
+  return snap.exists ? snap.data() : null;
+}
+
+// featured 保存
+async function saveFeaturedToServer(data) {
+  const ref = db.collection(FEATURED_COLLECTION).doc(FEATURED_DOC_ID);
+  await ref.set(data, { merge: true });
 }
 
 /* =================================================================
@@ -115,7 +132,6 @@ async function handleLogin(e) {
       return;
     }
   }
-  // B はパスワード不要
 
   // ログイン成功
   currentCode = rawCode;
@@ -143,9 +159,17 @@ async function setupArtScreen() {
   const commentInput = document.getElementById("art-comment");
   const count = document.getElementById("art-comment-count");
   const msg = document.getElementById("art-save-message");
+  const featureBtn = document.getElementById("feature-art");
 
   title.textContent = `${currentCode} さんの作品ページ`;
   msg.textContent = "";
+
+  // M の人だけ「トップページに表示」ボタンを出す
+  if (currentType === "M") {
+    featureBtn.classList.remove("hidden");
+  } else {
+    featureBtn.classList.add("hidden");
+  }
 
   const data = await loadArtworkFromServer(currentCode);
 
@@ -265,78 +289,61 @@ async function handleDeleteImage() {
     console.error(err);
     msg.textContent = "削除に失敗しました。";
   }
-
-  // Cloudinary 内の実ファイルはコンソールから手動削除する想定
 }
 
-/* =================================================================
-   トップページ用「みんなの作品」ギャラリー
-   ================================================================= */
+// ★ Mユーザー専用：この作品をトップページの one/two & three/four に入れ替える
+async function handleFeatureArt() {
+  const msg = document.getElementById("art-save-message");
 
-// Firestore から作品一覧を読み込んで、ギャラリー用に整形
-async function loadPublicArtworksForGallery() {
-  const snap = await db.collection(COLLECTIONS.artworks).get();
-  const items = [];
+  if (currentType !== "M") {
+    msg.textContent = "M から始まるコードの方のみ利用できます。";
+    setTimeout(() => (msg.textContent = ""), 2500);
+    return;
+  }
 
-  snap.forEach((doc) => {
-    const data = doc.data();
-    if (!data.imageUrl) return; // 画像がないものはスキップ
+  // 最新の作品データを取得（念のため）
+  const artwork = await loadArtworkFromServer(currentCode);
+  const imageUrl = artwork?.imageUrl || currentImageUrl;
+  const comment =
+    artwork?.comment ||
+    document.getElementById("art-comment").value.trim();
 
-    items.push({
-      code: doc.id,
-      imageUrl: data.imageUrl,
-      comment: data.comment || "",
-    });
-  });
-
-  return items;
-}
-
-// ログイン画面下のギャラリーを描画
-async function renderPublicGallery() {
-  const container = document.getElementById("public-gallery");
-  if (!container) return;
+  if (!imageUrl || !comment) {
+    msg.textContent = "画像と文章を保存してから「トップページに表示」を押してください。";
+    setTimeout(() => (msg.textContent = ""), 3000);
+    return;
+  }
 
   try {
-    const items = await loadPublicArtworksForGallery();
+    // 今の featured を取得
+    const data = (await loadFeaturedFromServer()) || {};
+    const slot1 = data.slot1 || null;
+    const slot2 = data.slot2 || null;
 
-    if (!items.length) {
-      container.innerHTML = '<p class="note">まだ作品が登録されていません。</p>';
-      return;
-    }
+    // ロジック：
+    // - いまの slot2 を slot1 にずらす
+    // - 今回の作品を slot2 に入れる
+    const newSlot1 = slot2 && slot2.imageUrl ? slot2 : null;
+    const newSlot2 = {
+      code: currentCode,
+      imageUrl,
+      comment,
+    };
 
-    // コード順で並べる（M00001, M00002, B00001…）
-    items.sort((a, b) => a.code.localeCompare(b.code));
+    await saveFeaturedToServer({
+      slot1: newSlot1,
+      slot2: newSlot2,
+      updatedAt: new Date().toISOString(),
+    });
 
-    const html = items
-      .map((item) => {
-        // コメント長すぎるときは少しだけ切る
-        const shortComment =
-          item.comment.length > 60
-            ? item.comment.slice(0, 57) + "..."
-            : item.comment;
+    msg.textContent = "トップページの作品を入れ替えました。";
+    setTimeout(() => (msg.textContent = ""), 2500);
 
-        return `
-          <div class="gallery-item">
-            <div class="gallery-image-wrap">
-              <img
-                src="${item.imageUrl}"
-                alt="${item.code} の作品"
-                class="gallery-image"
-              />
-            </div>
-            <div class="gallery-code">${item.code}</div>
-            <div class="gallery-comment">${escapeHtml(shortComment)}</div>
-          </div>
-        `;
-      })
-      .join("");
-
-    container.innerHTML = html;
+    // ログイン画面側も更新
+    await renderFeaturedOnLogin();
   } catch (err) {
     console.error(err);
-    container.innerHTML =
-      '<p class="note">作品の読み込みに失敗しました。時間をおいて再度お試しください。</p>';
+    msg.textContent = "入れ替えに失敗しました。";
   }
 }
 
@@ -456,6 +463,56 @@ async function handleSurveyReset() {
 }
 
 /* =================================================================
+   ログイン画面の featured 表示
+   ================================================================= */
+
+async function renderFeaturedOnLogin() {
+  const container = document.getElementById("featured-container");
+  if (!container) return;
+
+  try {
+    const data = await loadFeaturedFromServer();
+
+    if (
+      !data ||
+      (!data.slot1 || !data.slot1.imageUrl) &&
+      (!data.slot2 || !data.slot2.imageUrl)
+    ) {
+      container.innerHTML =
+        '<p class="featured-placeholder">まだ作品は表示されていません。</p>';
+      return;
+    }
+
+    const slots = [];
+    if (data.slot1 && data.slot1.imageUrl) slots.push(data.slot1);
+    if (data.slot2 && data.slot2.imageUrl) slots.push(data.slot2);
+
+    // 左が ONE/THREE、右が TWO/FOUR に相当
+    container.innerHTML = `
+      <div class="featured-grid">
+        ${slots
+          .map(
+            (s) => `
+              <article class="featured-item">
+                <div class="featured-img-wrap">
+                  <img src="${s.imageUrl}" alt="作品画像" class="featured-img" />
+                </div>
+                <p class="featured-comment">${escapeHtml(s.comment || "")}</p>
+                <p class="featured-code">コード：${escapeHtml(s.code || "")}</p>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML =
+      '<p class="featured-placeholder">作品の読み込みに失敗しました。</p>';
+  }
+}
+
+/* =================================================================
    共通
    ================================================================= */
 
@@ -508,6 +565,10 @@ function init() {
     .addEventListener("click", handleDeleteImage);
 
   document
+    .getElementById("feature-art")
+    .addEventListener("click", handleFeatureArt);
+
+  document
     .getElementById("logout-art")
     .addEventListener("click", logout);
 
@@ -524,8 +585,8 @@ function init() {
     .getElementById("logout-admin")
     .addEventListener("click", logout);
 
-  // ★ トップページの「みんなの作品」ギャラリーを表示
-  renderPublicGallery();
+  // 最初のトップページの作品表示
+  renderFeaturedOnLogin();
 }
 
 document.addEventListener("DOMContentLoaded", init);

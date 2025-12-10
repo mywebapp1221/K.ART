@@ -57,7 +57,8 @@
       outline: none;
       background: #ffffff;
     }
-    input:focus {
+    input:focus,
+    textarea:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 1px #2563eb20;
     }
@@ -141,52 +142,67 @@
       margin-top: 4px;
     }
 
-    .note {
-      font-size: 12px;
+    /* ▼ トップページに出す「ONE/TWO & THREE/FOUR」用 ▼ */
+    .featured-section {
+      max-width: 900px;
+      margin: 32px auto 0;
+    }
+    .featured-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      text-align: center;
+    }
+    .featured-desc {
+      font-size: 13px;
       color: #6b7280;
-      margin-top: 4px;
-      line-height: 1.5;
+      margin: 0 0 12px;
+      text-align: center;
     }
-
-    /* ▼ トップページのギャラリー ▼ */
-    .login-gallery-card {
-      margin-top: 24px;
+    .featured-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
-    .gallery {
+    .featured-item {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 10px 10px 12px;
+      box-shadow: 0 4px 12px #0000000a;
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 12px;
+      flex-direction: column;
+      gap: 6px;
     }
-    .gallery-item {
-      flex: 1 1 calc(50% - 6px); /* 横に2つ並ぶイメージ */
-      min-width: 140px;
-      background: #f9fafb;
+    .featured-img-wrap {
       border-radius: 12px;
-      padding: 8px;
-    }
-    .gallery-image-wrap {
-      width: 100%;
-      border-radius: 8px;
       overflow: hidden;
-      margin-bottom: 6px;
+      background: #f9fafb;
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .gallery-image {
-      width: 100%;
+    .featured-img {
+      max-width: 100%;
+      max-height: 220px;
       display: block;
     }
-    .gallery-code {
-      font-size: 12px;
-      font-weight: 600;
-      color: #4b5563;
-      margin-bottom: 4px;
-    }
-    .gallery-comment {
+    .featured-placeholder {
+      color: #9ca3af;
       font-size: 13px;
-      color: #374151;
-      line-height: 1.4;
-      word-break: break-word;
+      padding: 16px 8px;
+      text-align: center;
+    }
+    .featured-comment {
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 3em;
       white-space: pre-wrap;
+    }
+    .featured-code {
+      font-size: 11px;
+      color: #6b7280;
+      text-align: right;
     }
 
     @media (max-width: 640px) {
@@ -194,8 +210,8 @@
       .brand { font-size: 34px; }
       .subtitle { font-size: 14px; }
       .btn { font-size: 16px; }
-      .gallery-item {
-        flex: 1 1 100%; /* スマホは1列表示にする */
+      .featured-grid {
+        grid-template-columns: 1fr; /* スマホでは縦に2つ並べる */
       }
     }
   </style>
@@ -224,13 +240,13 @@
           required
         />
 
-        <!-- M / E だけが必要なパスワード欄（B は空でもOK） -->
+        <!-- M / E だけが必要なパスワード欄（B は空のままでOK） -->
         <label for="login-password">パスワード</label>
         <input
           type="password"
           id="login-password"
           maxlength="4"
-          placeholder="4桁のパスワード"
+          placeholder=""
           autocomplete="off"
         />
 
@@ -238,17 +254,14 @@
         <p id="login-error" class="error-message"></p>
       </form>
 
-      <!-- ▼ ここに「写真　写真」「解説　解説」のギャラリーを出す ▼ -->
-      <div class="card login-gallery-card">
-        <h3>みんなの作品（一部）</h3>
-        <p class="note">
-          これまでに作られたアート作品の一部です。<br>
-          ログインしなくても、写真とひとこと解説を見ることができます。
+      <!-- ▼ トップページに出す 2 枚の作品 (one/two & three/four) ▼ -->
+      <section class="featured-section">
+        <h2 class="featured-title">みんなの作品（一部）</h2>
+        <p class="featured-desc">
+          M から始まるコードの作品の中から、最大 2 作品が表示されます。
         </p>
-        <div id="public-gallery" class="gallery">
-          <!-- JavaScript（main.js）で自動で埋める -->
-        </div>
-      </div>
+        <div id="featured-container"></div>
+      </section>
     </section>
 
     <!-- ▼▼▼ M / B 作品画面 ▼▼▼ -->
@@ -273,10 +286,13 @@
           <input type="file" id="art-image-input" accept="image/*" />
         </label>
 
-        <div style="margin-top: 8px;">
+        <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
           <button id="delete-image" class="btn danger small">画像を削除する</button>
+          <!-- ★ M の人専用：トップページの one/two & three/four を入れ替える -->
+          <button id="feature-art" class="btn secondary small hidden">
+            この作品をトップページに表示
+          </button>
         </div>
-
       </div>
 
       <div class="card">
@@ -293,7 +309,7 @@
       </div>
     </section>
 
-    <!-- ▼▼▼ E → 管理画面 ▼▼▼ -->
+    <!-- ▼▼▼ E 管理画面 ▼▼▼ -->
     <section id="admin-screen" class="screen">
       <header class="top-bar">
         <h2>管理画面（Eユーザー専用）</h2>
@@ -303,13 +319,13 @@
       <div class="card">
         <h3>アンケート結果の入力</h3>
         <form id="survey-form">
-          <label for="age">年齢</label>
+          <label>年齢</label>
           <input id="age" type="number" min="0" max="120" required />
 
-          <label for="wallet">財布の中身（円）</label>
+          <label>財布の中身（円）</label>
           <input id="wallet" type="number" min="0" step="100" required />
 
-          <label for="free-comment">自由な意見</label>
+          <label>自由な意見</label>
           <textarea id="free-comment" rows="3"></textarea>
 
           <button class="btn primary wide" type="submit">追加</button>
