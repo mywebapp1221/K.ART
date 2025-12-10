@@ -1,28 +1,34 @@
 // main.js
 
-// ---------- Firestore コレクション名 ----------
+// ==================== Firestore コレクション名 ====================
 const COLLECTIONS = {
   artworks: "artworks", // A/B お客さんの作品
   surveys: "surveys",   // C のアンケート結果
 };
 
-// ---------- Cloudinary 設定（自分の値にする） ----------
-const cloudName = "drfgen4gm";        // ダッシュボードに出てる Cloud name
-const uploadPreset = "karts_unsigned"; // 自分が作った「Unsigned」preset名に合わせる
+// ==================== Cloudinary 設定 ====================
+// ★ここは自分の Cloudinary の値に合わせる
+const cloudName = "drfgen4gm";         // ダッシュボードに出ている Cloud name
+const uploadPreset = "karts_unsigned"; // 作成した「Unsigned」アップロードプリセット名
 
-let currentCode = null;        // 例: "A00001" / "B00001"
-let currentType = null;        // "A" | "B" | "C"
-let currentArtworkId = null;   // 例: "00001" ← 数字5ケタだけ。A/B で共通
-let currentImageUrl = null;    // 画像URL（Cloudinary）
+// ==================== 現在のログイン状態を保持する変数 ====================
+let currentCode = null;       // 例: "A00001" / "B00001" / "C00001"
+let currentType = null;       // "A" | "B" | "C"
+let currentArtworkId = null;  // 例: "A00001" / "B00001"（作品IDとして使う）
+let currentImageUrl = null;   // 画像URL（Cloudinary）
 
-// ---------- 画面切替 ----------
+
+// ==================== 画面切り替え ====================
 function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
   const target = document.getElementById(screenId);
   if (target) target.classList.add("active");
 }
 
-/* ==================== Firestore 関連 ==================== */
+
+/* ******************************************************************
+ *                          Firestore 関連
+ * ******************************************************************/
 
 // 作品を Firestore から取得
 async function loadArtworkFromServer(artworkId) {
@@ -61,7 +67,10 @@ async function resetSurveysOnServer() {
   await batch.commit();
 }
 
-/* ==================== 画像アップロード（Cloudinary） ==================== */
+
+/* ******************************************************************
+ *                     画像アップロード（Cloudinary）
+ * ******************************************************************/
 
 // Cloudinary に画像をアップロードして URL を返す
 async function uploadArtworkImage(artworkId, file) {
@@ -69,10 +78,10 @@ async function uploadArtworkImage(artworkId, file) {
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
   const formData = new FormData();
-  formData.append("file", file);                  // 実際の画像ファイル
-  formData.append("upload_preset", uploadPreset); // Unsigned preset
-  formData.append("public_id", artworkId);        // 例: "00001"
-  formData.append("folder", "karts-artworks");    // Cloudinary 内のフォルダ名（任意）
+  formData.append("file", file);                   // 実際の画像ファイル
+  formData.append("upload_preset", uploadPreset);  // Unsigned preset
+  formData.append("public_id", artworkId);         // 例: "A00001" / "B00001"
+  formData.append("folder", "karts-artworks");     // Cloudinary 内のフォルダ名（任意）
 
   const res = await fetch(url, {
     method: "POST",
@@ -87,7 +96,10 @@ async function uploadArtworkImage(artworkId, file) {
   return data.secure_url; // 画像URL (https://〜)
 }
 
-/* ==================== ログイン処理 ==================== */
+
+/* ******************************************************************
+ *                           ログイン処理
+ * ******************************************************************/
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -102,9 +114,9 @@ async function handleLogin(e) {
     return;
   }
 
-  currentCode = raw;            // "A00001" / "B00001"
-  currentType = raw.charAt(0);  // "A" / "B" / "C"
-  currentArtworkId = raw.slice(1); // "00001" ← ★ここがポイント（A/B共通ID）
+  currentCode = raw;              // "A00001" / "B00001" / "C00001"
+  currentType = raw.charAt(0);    // "A" / "B" / "C"
+  currentArtworkId = raw;         // ★ 作品IDとして「A00001」「B00001」をそのまま使う
   error.textContent = "";
 
   if (currentType === "A" || currentType === "B") {
@@ -116,7 +128,10 @@ async function handleLogin(e) {
   }
 }
 
-/* ==================== A / B 作品画面 ==================== */
+
+/* ******************************************************************
+ *                        A / B 作品画面
+ * ******************************************************************/
 
 async function setupArtScreen() {
   const title = document.getElementById("art-title");
@@ -128,7 +143,7 @@ async function setupArtScreen() {
   // 画面タイトルはログインコードそのままを表示
   title.textContent = currentCode + " さんの作品ページ";
 
-  // Firestore から読み込み（A/B共通IDを使う）
+  // Firestore から読み込み（A/B それぞれ別のIDとして扱う）
   const data = await loadArtworkFromServer(currentArtworkId);
 
   if (data && data.imageUrl) {
@@ -169,7 +184,7 @@ async function handleImageChange(e) {
     };
     reader.readAsDataURL(file);
 
-    // Cloudinary にアップロード（A/B共通IDを使う）
+    // Cloudinary にアップロード（A00001 / B00001 それぞれ別ID）
     const url = await uploadArtworkImage(currentArtworkId, file);
     currentImageUrl = url;
 
@@ -210,7 +225,10 @@ function handleCommentInput(e) {
   countSpan.textContent = e.target.value.length.toString();
 }
 
-/* ==================== C 管理画面（アンケート） ==================== */
+
+/* ******************************************************************
+ *                     C 管理画面（アンケート）
+ * ******************************************************************/
 
 async function setupAdminScreen() {
   document.getElementById("survey-save-message").textContent = "";
@@ -371,7 +389,10 @@ async function handleSurveyReset() {
   }
 }
 
-/* ==================== 共通 ==================== */
+
+/* ******************************************************************
+ *                               共通
+ * ******************************************************************/
 
 function escapeHtml(str) {
   return String(str)
