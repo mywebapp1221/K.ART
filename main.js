@@ -4,10 +4,6 @@ const COLLECTIONS = {
   surveys: "surveys",   // E のアンケート結果
 };
 
-// トップページ用の featured コレクション
-const FEATURED_COLLECTION = "featured";
-const FEATURED_DOC_ID = "home";
-
 // ==================== Cloudinary 設定 ====================
 const cloudName = "drfgen4gm";         // Cloud name
 const uploadPreset = "karts_unsigned"; // Unsigned upload preset 名
@@ -36,7 +32,7 @@ async function loadArtworkFromServer(code) {
   return snap.exists ? snap.data() : null;
 }
 
-// 作品保存
+// 作品保存（merge:true）
 async function saveArtworkToServer(code, data) {
   const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   await docRef.set(data, { merge: true });
@@ -62,19 +58,6 @@ async function resetSurveysOnServer() {
   const batch = db.batch();
   snap.forEach((d) => batch.delete(d.ref));
   await batch.commit();
-}
-
-// トップページ用 featured 読み込み
-async function loadFeaturedFromServer() {
-  const ref = db.collection(FEATURED_COLLECTION).doc(FEATURED_DOC_ID);
-  const snap = await ref.get();
-  return snap.exists ? snap.data() : null;
-}
-
-// featured 保存
-async function saveFeaturedToServer(data) {
-  const ref = db.collection(FEATURED_COLLECTION).doc(FEATURED_DOC_ID);
-  await ref.set(data, { merge: true });
 }
 
 /* =================================================================
@@ -216,6 +199,7 @@ async function handleImageChange(e) {
     await saveArtworkToServer(currentCode, {
       imageUrl,
       publicId,
+      type: currentType, // M or B を保存
       updatedAt: new Date().toISOString(),
     });
 
@@ -238,6 +222,7 @@ async function handleSaveArt() {
     await saveArtworkToServer(currentCode, {
       imageUrl: currentImageUrl || null,
       comment,
+      type: currentType,
       updatedAt: new Date().toISOString(),
     });
 
@@ -291,7 +276,7 @@ async function handleDeleteImage() {
   }
 }
 
-// ★ Mユーザー専用：この作品をトップページの「みんなの作品」に入れ替え
+// ★ Mユーザー専用：この作品をトップページの「みんなの作品」に反映
 async function handleFeatureArt() {
   const msg = document.getElementById("art-save-message");
 
@@ -301,7 +286,7 @@ async function handleFeatureArt() {
     return;
   }
 
-  // 念のため最新データ取得
+  // 最新データ取得
   const artwork = await loadArtworkFromServer(currentCode);
   const imageUrl = artwork?.imageUrl || currentImageUrl;
   const comment =
@@ -315,39 +300,10 @@ async function handleFeatureArt() {
   }
 
   try {
-    // 既存の featured を取得
-    const data = (await loadFeaturedFromServer()) || {};
-    let items = Array.isArray(data.items) ? data.items : [];
-
-    // すでにある古い形式(slot1/slot2)があれば一度だけ取り込む
-    if (!items.length) {
-      if (data.slot1) items.push(data.slot1);
-      if (data.slot2) items.push(data.slot2);
-    }
-
-    // M 以外(Bなど)を除外しつつ、同じコードは消しておく
-    items = items.filter(
-      (it) =>
-        it &&
-        typeof it.code === "string" &&
-        it.code.startsWith("M") &&
-        it.code !== currentCode
-    );
-
-    // 先頭に今回の作品を追加（= 一番目の「one / three」）
-    items.unshift({
-      code: currentCode,
-      imageUrl,
-      comment,
-      createdAt: new Date().toISOString(),
-    });
-
-    // 最大 8 件までに切り詰め
-    items = items.slice(0, 8);
-
-    await saveFeaturedToServer({
-      items,
-      updatedAt: new Date().toISOString(),
+    // この作品に featuredAt を付ける（M として）
+    await saveArtworkToServer(currentCode, {
+      type: "M",
+      featuredAt: Date.now(),
     });
 
     msg.textContent = "みんなの作品を入れ替えました。";
@@ -477,7 +433,7 @@ async function handleSurveyReset() {
 }
 
 /* =================================================================
-   ログイン画面の featured 表示
+   ログイン画面の「みんなの作品」表示
    ================================================================= */
 
 async function renderFeaturedOnLogin() {
@@ -485,27 +441,28 @@ async function renderFeaturedOnLogin() {
   if (!container) return;
 
   try {
-    const data = await loadFeaturedFromServer();
+    // featuredAt の新しい順で 30 件くらい取得して、その中から
+    // 「type が M」「featuredAt があるもの」だけを 8 件に絞る
+    const snap = await db
+      .collection(COLLECTIONS.artworks)
+      .orderBy("featuredAt", "desc")
+      .limit(30)
+      .get();
 
-    let items = [];
-    if (data) {
-      if (Array.isArray(data.items)) {
-        items = data.items;
-      } else {
-        // 古い形式(slot1/slot2)を一時的にサポート
-        if (data.slot1) items.push(data.slot1);
-        if (data.slot2) items.push(data.slot2);
-      }
-    }
+    let items = snap.docs.map((doc) => {
+      const data = doc.data() || {};
+      return {
+        code: doc.id,
+        imageUrl: data.imageUrl,
+        comment: data.comment || "",
+        type: data.type || "",
+        featuredAt: data.featuredAt || null,
+      };
+    });
 
-    // M から始まるコードだけ・画像があるものだけ・最大8件
-    items = items.filter(
-      (it) =>
-        it &&
-        typeof it.code === "string" &&
-        it.code.startsWith("M") &&
-        it.imageUrl
-    ).slice(0, 8);
+    items = items
+      .filter((it) => it.type === "M" && it.imageUrl && it.featuredAt)
+      .slice(0, 8);
 
     if (!items.length) {
       container.innerHTML =
@@ -564,6 +521,7 @@ function logout() {
   if (error) error.textContent = "";
 
   showScreen("login-screen");
+  renderFeaturedOnLogin(); // ログアウト後も最新の一覧を表示
 }
 
 function init() {
