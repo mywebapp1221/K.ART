@@ -141,11 +141,62 @@
       margin-top: 4px;
     }
 
+    .note {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    /* ▼ トップページのギャラリー ▼ */
+    .login-gallery-card {
+      margin-top: 24px;
+    }
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .gallery-item {
+      flex: 1 1 calc(50% - 6px); /* 横に2つ並ぶイメージ */
+      min-width: 140px;
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 8px;
+    }
+    .gallery-image-wrap {
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .gallery-image {
+      width: 100%;
+      display: block;
+    }
+    .gallery-code {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 4px;
+    }
+    .gallery-comment {
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.4;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
     @media (max-width: 640px) {
       #app { padding: 12px 10px 24px; }
       .brand { font-size: 34px; }
       .subtitle { font-size: 14px; }
       .btn { font-size: 16px; }
+      .gallery-item {
+        flex: 1 1 100%; /* スマホは1列表示にする */
+      }
     }
   </style>
 </head>
@@ -162,7 +213,6 @@
       </p>
 
       <form id="login-form">
-
         <!-- ログインコード -->
         <label for="login-code">ログインコード（アルファベット1文字 + 5桁数字）</label>
         <input
@@ -174,22 +224,34 @@
           required
         />
 
-        <!-- パスワード（M/E だけ内部でチェック。画面上はヒントなし） -->
+        <!-- M / E だけが必要なパスワード欄（B は空でもOK） -->
         <label for="login-password">パスワード</label>
         <input
           type="password"
           id="login-password"
           maxlength="4"
-          placeholder="4桁の数字"
+          placeholder="4桁のパスワード"
           autocomplete="off"
         />
 
         <button type="submit" class="btn primary">ログイン</button>
         <p id="login-error" class="error-message"></p>
       </form>
+
+      <!-- ▼ ここに「写真　写真」「解説　解説」のギャラリーを出す ▼ -->
+      <div class="card login-gallery-card">
+        <h3>みんなの作品（一部）</h3>
+        <p class="note">
+          これまでに作られたアート作品の一部です。<br>
+          ログインしなくても、写真とひとこと解説を見ることができます。
+        </p>
+        <div id="public-gallery" class="gallery">
+          <!-- JavaScript（main.js）で自動で埋める -->
+        </div>
+      </div>
     </section>
 
-    <!-- ▼▼▼ M/B 作品画面 ▼▼▼ -->
+    <!-- ▼▼▼ M / B 作品画面 ▼▼▼ -->
     <section id="art-screen" class="screen">
       <header class="top-bar">
         <h2 id="art-title"></h2>
@@ -231,7 +293,7 @@
       </div>
     </section>
 
-    <!-- ▼▼▼ E 管理画面 ▼▼▼ -->
+    <!-- ▼▼▼ E → 管理画面 ▼▼▼ -->
     <section id="admin-screen" class="screen">
       <header class="top-bar">
         <h2>管理画面（Eユーザー専用）</h2>
@@ -241,13 +303,13 @@
       <div class="card">
         <h3>アンケート結果の入力</h3>
         <form id="survey-form">
-          <label>年齢</label>
+          <label for="age">年齢</label>
           <input id="age" type="number" min="0" max="120" required />
 
-          <label>財布の中身（円）</label>
+          <label for="wallet">財布の中身（円）</label>
           <input id="wallet" type="number" min="0" step="100" required />
 
-          <label>自由な意見</label>
+          <label for="free-comment">自由な意見</label>
           <textarea id="free-comment" rows="3"></textarea>
 
           <button class="btn primary wide" type="submit">追加</button>

@@ -9,31 +9,30 @@ const cloudName = "drfgen4gm";         // Cloud name
 const uploadPreset = "karts_unsigned"; // Unsigned upload preset 名
 
 // ==================== 状態管理用の変数 ====================
-let currentCode = null;     // 例: "M00001" / "B00001" / "E00001"
-let currentType = null;     // "M" | "B" | "E"
-let currentImageUrl = null; // Firestore に保存されている画像 URL
+let currentCode = null;
+let currentType = null;      // "M" | "B" | "E"
+let currentImageUrl = null;  // Firestore に保存されている URL
 
 // ==================== 画面切り替え ====================
 function showScreen(screenId) {
-  document.querySelectorAll(".screen").forEach((s) => {
-    s.classList.remove("active");
-  });
-  const target = document.getElementById(screenId);
-  if (target) target.classList.add("active");
+  document.querySelectorAll(".screen").forEach((s) =>
+    s.classList.remove("active")
+  );
+  document.getElementById(screenId).classList.add("active");
 }
 
 /* =================================================================
    Firestore 関連
    ================================================================= */
 
-// 作品読み込み（ドキュメントID = ログインコード）
+// 作品読み込み
 async function loadArtworkFromServer(code) {
   const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   const snap = await docRef.get();
   return snap.exists ? snap.data() : null;
 }
 
-// 作品保存（ドキュメントID = ログインコード）
+// 作品保存
 async function saveArtworkToServer(code, data) {
   const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   await docRef.set(data, { merge: true });
@@ -45,7 +44,6 @@ async function loadSurveysFromServer() {
     .collection(COLLECTIONS.surveys)
     .orderBy("createdAt")
     .get();
-
   return snap.docs.map((doc) => doc.data());
 }
 
@@ -100,11 +98,11 @@ async function handleLogin(e) {
   const rawCode = (codeInput.value || "").trim().toUpperCase();
   const password = (passInput.value || "").trim();
 
-  // ★ M / B / E + 5 桁数字だけ許可
+  // M / B / E + 5 桁数字
   const pattern = /^[MBE][0-9]{5}$/;
   if (!pattern.test(rawCode)) {
     error.textContent =
-      "「B00001」のように、アルファベット1文字 + 5桁の数字で入力してください。";
+      "「B00001」のようにアルファベット1文字 + 5桁の数字で入力してください。";
     return;
   }
 
@@ -117,7 +115,7 @@ async function handleLogin(e) {
       return;
     }
   }
-  // B はパスワード不要（何を入れても無視）
+  // B はパスワード不要
 
   // ログイン成功
   currentCode = rawCode;
@@ -163,7 +161,7 @@ async function setupArtScreen() {
     imagePlaceholder.classList.remove("hidden");
   }
 
-  commentInput.value = (data && data.comment) || "";
+  commentInput.value = data?.comment || "";
   count.textContent = commentInput.value.length.toString();
 }
 
@@ -176,9 +174,9 @@ async function handleImageChange(e) {
   const placeholder = document.getElementById("art-image-placeholder");
   const msg = document.getElementById("art-save-message");
 
-  msg.textContent = "画像をアップロード中です…";
+  msg.textContent = "画像アップロード中…";
 
-  // 先にローカルプレビュー
+  // 先にローカルでプレビュー
   const reader = new FileReader();
   reader.onload = (ev) => {
     imagePreview.src = ev.target.result;
@@ -201,12 +199,11 @@ async function handleImageChange(e) {
     setTimeout(() => (msg.textContent = ""), 2000);
   } catch (err) {
     console.error(err);
-    msg.textContent =
-      "アップロードに失敗しました。時間をおいて再試行してください。";
+    msg.textContent = "アップロードに失敗しました。時間をおいて再試行してください。";
   }
 }
 
-// コメント保存（画像URLも一緒に保存）
+// コメント保存（＋画像URLも一緒に保存）
 async function handleSaveArt() {
   if (!currentCode) return;
 
@@ -234,7 +231,7 @@ function handleCommentInput(e) {
     e.target.value.length.toString();
 }
 
-// 画像削除（サイト上＆ Firestore から）
+// 画像削除（サイト上＆Firestoreから）
 async function handleDeleteImage() {
   if (!currentCode) return;
 
@@ -268,7 +265,79 @@ async function handleDeleteImage() {
     console.error(err);
     msg.textContent = "削除に失敗しました。";
   }
+
   // Cloudinary 内の実ファイルはコンソールから手動削除する想定
+}
+
+/* =================================================================
+   トップページ用「みんなの作品」ギャラリー
+   ================================================================= */
+
+// Firestore から作品一覧を読み込んで、ギャラリー用に整形
+async function loadPublicArtworksForGallery() {
+  const snap = await db.collection(COLLECTIONS.artworks).get();
+  const items = [];
+
+  snap.forEach((doc) => {
+    const data = doc.data();
+    if (!data.imageUrl) return; // 画像がないものはスキップ
+
+    items.push({
+      code: doc.id,
+      imageUrl: data.imageUrl,
+      comment: data.comment || "",
+    });
+  });
+
+  return items;
+}
+
+// ログイン画面下のギャラリーを描画
+async function renderPublicGallery() {
+  const container = document.getElementById("public-gallery");
+  if (!container) return;
+
+  try {
+    const items = await loadPublicArtworksForGallery();
+
+    if (!items.length) {
+      container.innerHTML = '<p class="note">まだ作品が登録されていません。</p>';
+      return;
+    }
+
+    // コード順で並べる（M00001, M00002, B00001…）
+    items.sort((a, b) => a.code.localeCompare(b.code));
+
+    const html = items
+      .map((item) => {
+        // コメント長すぎるときは少しだけ切る
+        const shortComment =
+          item.comment.length > 60
+            ? item.comment.slice(0, 57) + "..."
+            : item.comment;
+
+        return `
+          <div class="gallery-item">
+            <div class="gallery-image-wrap">
+              <img
+                src="${item.imageUrl}"
+                alt="${item.code} の作品"
+                class="gallery-image"
+              />
+            </div>
+            <div class="gallery-code">${item.code}</div>
+            <div class="gallery-comment">${escapeHtml(shortComment)}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML =
+      '<p class="note">作品の読み込みに失敗しました。時間をおいて再度お試しください。</p>';
+  }
 }
 
 /* =================================================================
@@ -315,17 +384,14 @@ async function handleSurveySubmit(e) {
   }
 }
 
-// アンケート表示＋簡易グラフ
+// アンケート表示
 async function renderSurveyData() {
   const summaryDiv = document.getElementById("survey-summary");
-  const ageChartDiv = document.getElementById("age-chart");
   const listDiv = document.getElementById("survey-list");
 
   const surveys = await loadSurveysFromServer();
-
   if (!surveys.length) {
     summaryDiv.innerHTML = "<p>まだアンケート結果がありません。</p>";
-    ageChartDiv.innerHTML = "";
     listDiv.innerHTML = "";
     return;
   }
@@ -344,48 +410,16 @@ async function renderSurveyData() {
     <p>財布の中身の平均：${avgWallet.toLocaleString()} 円</p>
   `;
 
-  // 年齢グラフ
-  const ageGroups = [
-    { label: "〜39歳", min: 0, max: 39, count: 0 },
-    { label: "40〜64歳", min: 40, max: 64, count: 0 },
-    { label: "65歳〜", min: 65, max: 150, count: 0 },
-  ];
-
-  surveys.forEach((s) => {
-    ageGroups.forEach((g) => {
-      if (s.age >= g.min && s.age <= g.max) {
-        g.count++;
-      }
-    });
-  });
-
-  const maxCount = Math.max(...ageGroups.map((g) => g.count), 1);
-  ageChartDiv.innerHTML = "";
-  ageGroups.forEach((g) => {
-    const percent = (g.count / maxCount) * 100;
-    const row = document.createElement("div");
-    row.className = "chart-row";
-    row.innerHTML = `
-      <div class="chart-label">${g.label}</div>
-      <div class="chart-bar">
-        <div class="chart-bar-fill" style="width: ${percent}%;"></div>
-      </div>
-      <div class="chart-value">${g.count}</div>
-    `;
-    ageChartDiv.appendChild(row);
-  });
-
-  // 一覧テーブル
   const rows = surveys
     .map(
       (s, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${s.age}</td>
-        <td>${(s.wallet || 0).toLocaleString()}</td>
-        <td>${escapeHtml(s.freeComment || "")}</td>
-      </tr>
-    `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${s.age}</td>
+          <td>${(s.wallet || 0).toLocaleString()}</td>
+          <td>${escapeHtml(s.freeComment || "")}</td>
+        </tr>
+      `
     )
     .join("");
 
@@ -489,6 +523,9 @@ function init() {
   document
     .getElementById("logout-admin")
     .addEventListener("click", logout);
+
+  // ★ トップページの「みんなの作品」ギャラリーを表示
+  renderPublicGallery();
 }
 
 document.addEventListener("DOMContentLoaded", init);
