@@ -174,13 +174,13 @@
           required
         />
 
-        <!-- ★ M / E だけが必要なパスワード欄（B は無視してログインできる） -->
+        <!-- パスワード（M/E だけ内部でチェック。画面上はヒントなし） -->
         <label for="login-password">パスワード</label>
         <input
           type="password"
           id="login-password"
           maxlength="4"
-          placeholder="1221"
+          placeholder="4桁の数字"
           autocomplete="off"
         />
 
@@ -189,7 +189,7 @@
       </form>
     </section>
 
-    <!-- ▼▼▼ A/B → M/B 作品画面 ▼▼▼ -->
+    <!-- ▼▼▼ M/B 作品画面 ▼▼▼ -->
     <section id="art-screen" class="screen">
       <header class="top-bar">
         <h2 id="art-title"></h2>
@@ -231,7 +231,7 @@
       </div>
     </section>
 
-    <!-- ▼▼▼ E → 管理画面 ▼▼▼ -->
+    <!-- ▼▼▼ E 管理画面 ▼▼▼ -->
     <section id="admin-screen" class="screen">
       <header class="top-bar">
         <h2>管理画面（Eユーザー専用）</h2>
