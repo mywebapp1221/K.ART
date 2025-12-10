@@ -73,6 +73,7 @@ async function uploadArtworkImage(code, file) {
   const formData = new FormData();
   formData.append("file", file);                  // 画像ファイル
   formData.append("upload_preset", uploadPreset); // Unsigned preset
+
   // public_id は「コード＋タイムスタンプ」にしておく（毎回ユニーク）
   const publicId = `${code}_${Date.now()}`;
   formData.append("public_id", publicId);
@@ -188,7 +189,7 @@ async function handleImageChange(e) {
     // Firestore にも即反映（画像だけ先に確定）
     await saveArtworkToServer(currentCode, {
       imageUrl,
-      publicId,  // 後で Cloudinary 側を手動削除したい時に使える
+      publicId, // 後で Cloudinary 側を手動削除したい時に使える
       updatedAt: new Date().toISOString(),
     });
 
@@ -210,7 +211,6 @@ async function handleSaveArt() {
 
   try {
     await saveArtworkToServer(currentCode, {
-      // imageUrl は currentImageUrl をそのまま再保存
       imageUrl: currentImageUrl || null,
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
@@ -249,10 +249,9 @@ async function handleDeleteImage() {
   if (!ok) return;
 
   try {
-    // Firestore 上の imageUrl を null にする（論理削除）
+    // Firestore 上の imageUrl / publicId を null にする（論理削除）
     await saveArtworkToServer(currentCode, {
       imageUrl: null,
-      // publicId も消しておく（必要なら）
       publicId: null,
       updatedAt: new Date().toISOString(),
     });
@@ -485,6 +484,7 @@ function init() {
       handleSaveArt();
     });
 
+  // ★ 画像削除ボタン
   document
     .getElementById("delete-image")
     .addEventListener("click", () => {
