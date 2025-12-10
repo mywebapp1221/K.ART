@@ -81,7 +81,9 @@
     .btn.small { font-size: 14px; padding: 6px 12px; }
     .btn.wide { width: 100%; }
 
-    .btn.danger {
+    .btn.danger,
+    .btn.danger:visited,
+    .btn.danger:active {
       background: #dc2626;
       color: #ffffff;
     }
@@ -267,13 +269,23 @@
             まだ画像が登録されていません
           </div>
         </div>
+
+        <!-- 画像選択ボタン -->
         <label class="file-label">
           画像ファイルを選択
           <input type="file" id="art-image-input" accept="image/*" />
         </label>
+
+        <!-- ★ 画像削除ボタン（Cloudinary + Firestore 両方） -->
+        <div style="margin-top: 8px;">
+          <button id="delete-image" type="button" class="btn danger small">
+            画像を削除する
+          </button>
+        </div>
+
         <p class="note">
           ※ ログインコードごとに1枚の画像がオンラインに保存されます。<br>
-          （同じコードでログインすれば、どの端末からでも見られます）
+          ※ 「画像を削除する」を押すと、このコードに紐づく画像が消えます。
         </p>
       </div>
 
@@ -354,7 +366,6 @@
           このボタンを押すと、保存されているアンケート結果がすべて削除されます。<br>
           （元に戻すことはできません）
         </p>
-        <!-- ★ クラス名を修正 -->
         <button id="reset-survey" class="btn danger wide">アンケートを全て削除</button>
         <p id="survey-reset-message" class="info-message"></p>
       </div>
@@ -365,7 +376,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- 設定用スクリプト & メイン処理 -->
+  <!-- 自分の設定用スクリプト & メイン処理 -->
+  <!-- firebase-config.js の中で firebase.initializeApp(...) と db = firebase.firestore() をしておく -->
   <script src="firebase-config.js"></script>
   <script src="main.js"></script>
 </body>
