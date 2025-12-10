@@ -99,7 +99,7 @@ async function handleLogin(e) {
   const password = (passInput.value || "").trim();
 
   // M / B / E + 5 桁数字
-  const pattern = /^[MBE][0-9]{5}$/;
+  const pattern = /^[B][0-9]{5}$/;
   if (!pattern.test(rawCode)) {
     error.textContent =
       "「B00001」のようにアルファベット1文字 + 5桁の数字で入力してください。";
