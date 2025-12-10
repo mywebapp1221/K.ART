@@ -118,10 +118,10 @@ async function handleLogin(e) {
   currentImageUrl = null;
   error.textContent = "";
 
-  if (currentType === "A" || currentType === "B") {
+  if (currentType === "M" || currentType === "B") {
     await setupArtScreen();
     showScreen("art-screen");
-  } else if (currentType === "C") {
+  } else if (currentType === "E") {
     await setupAdminScreen();
     showScreen("admin-screen");
   }
