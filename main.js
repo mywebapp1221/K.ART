@@ -73,8 +73,9 @@ async function uploadArtworkImage(code, file) {
   const formData = new FormData();
   formData.append("file", file);                  // 画像ファイル
   formData.append("upload_preset", uploadPreset); // Unsigned preset
-  formData.append("public_id", code);             // 例: "A00001" / "B00001"
-  formData.append("folder", "karts-artworks");    // Cloudinary のフォルダ名（任意）
+  // ⚠ public_id は指定しない（同じIDだと unsigned では上書きできないため）
+  // 代わりにフォルダだけ指定して、Cloudinary にユニークなIDを作ってもらう
+  formData.append("folder", `karts-artworks/${code}`);
 
   const res = await fetch(url, {
     method: "POST",
@@ -82,6 +83,7 @@ async function uploadArtworkImage(code, file) {
   });
 
   if (!res.ok) {
+    console.error("Cloudinary upload error:", await res.text());
     throw new Error("Cloudinary へのアップロードに失敗しました");
   }
 

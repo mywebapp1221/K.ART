@@ -354,7 +354,8 @@
           このボタンを押すと、保存されているアンケート結果がすべて削除されます。<br>
           （元に戻すことはできません）
         </p>
-        <button id="reset-survey" class="btn.danger btn danger wide">アンケートを全て削除</button>
+        <!-- ★ クラス名を修正 -->
+        <button id="reset-survey" class="btn danger wide">アンケートを全て削除</button>
         <p id="survey-reset-message" class="info-message"></p>
       </div>
     </section>
@@ -364,8 +365,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- 自分の設定用スクリプト & メイン処理 -->
-  <!-- firebase-config.js の中で firebase.initializeApp(...) と db = firebase.firestore() をしておく -->
+  <!-- 設定用スクリプト & メイン処理 -->
   <script src="firebase-config.js"></script>
   <script src="main.js"></script>
 </body>
