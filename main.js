@@ -1,22 +1,18 @@
-// main.js
-
 // ==================== Firestore コレクション名 ====================
 const COLLECTIONS = {
-  artworks: "artworks", // A/B お客さんの作品
+  artworks: "artworks", // A / B お客さんの作品
   surveys: "surveys",   // C のアンケート結果
 };
 
 // ==================== Cloudinary 設定 ====================
-// ★ここは自分の Cloudinary の値に合わせる
-const cloudName = "drfgen4gm";         // ダッシュボードに出ている Cloud name
-const uploadPreset = "karts_unsigned"; // 作成した「Unsigned」アップロードプリセット名
+// Cloudinary ダッシュボードに書いてある値に合わせる
+const cloudName = "drfgen4gm";         // Cloud name
+const uploadPreset = "karts_unsigned"; // Unsigned upload preset 名
 
-// ==================== 現在のログイン状態を保持する変数 ====================
-let currentCode = null;       // 例: "A00001" / "B00001" / "C00001"
-let currentType = null;       // "A" | "B" | "C"
-let currentArtworkId = null;  // 例: "A00001" / "B00001"（作品IDとして使う）
-let currentImageUrl = null;   // 画像URL（Cloudinary）
-
+// ==================== 状態管理用の変数 ====================
+let currentCode = null;      // 例: "A00001" / "B00001"
+let currentType = null;      // "A" | "B" | "C"
+let currentImageUrl = null;  // Cloudinary 上の画像URL
 
 // ==================== 画面切り替え ====================
 function showScreen(screenId) {
@@ -25,22 +21,21 @@ function showScreen(screenId) {
   if (target) target.classList.add("active");
 }
 
+/* =================================================================
+   Firestore 関連
+   ================================================================= */
 
-/* ******************************************************************
- *                          Firestore 関連
- * ******************************************************************/
-
-// 作品を Firestore から取得
-async function loadArtworkFromServer(artworkId) {
-  const docRef = db.collection(COLLECTIONS.artworks).doc(artworkId);
+// 作品を Firestore から取得（ドキュメントID = ログインコード）
+async function loadArtworkFromServer(code) {
+  const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   const snap = await docRef.get();
   if (!snap.exists) return null;
   return snap.data();
 }
 
-// 作品を Firestore に保存
-async function saveArtworkToServer(artworkId, data) {
-  const docRef = db.collection(COLLECTIONS.artworks).doc(artworkId);
+// 作品を Firestore に保存（ドキュメントID = ログインコード）
+async function saveArtworkToServer(code, data) {
+  const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   await docRef.set(data, { merge: true });
 }
 
@@ -67,21 +62,19 @@ async function resetSurveysOnServer() {
   await batch.commit();
 }
 
-
-/* ******************************************************************
- *                     画像アップロード（Cloudinary）
- * ******************************************************************/
+/* =================================================================
+   画像アップロード（Cloudinary）
+   ================================================================= */
 
 // Cloudinary に画像をアップロードして URL を返す
-async function uploadArtworkImage(artworkId, file) {
-  // Cloudinary のアップロードURL
+async function uploadArtworkImage(code, file) {
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
   const formData = new FormData();
-  formData.append("file", file);                   // 実際の画像ファイル
-  formData.append("upload_preset", uploadPreset);  // Unsigned preset
-  formData.append("public_id", artworkId);         // 例: "A00001" / "B00001"
-  formData.append("folder", "karts-artworks");     // Cloudinary 内のフォルダ名（任意）
+  formData.append("file", file);                  // 画像ファイル
+  formData.append("upload_preset", uploadPreset); // Unsigned preset
+  formData.append("public_id", code);             // 例: "A00001"
+  formData.append("folder", "karts-artworks");    // Cloudinary のフォルダ名（任意）
 
   const res = await fetch(url, {
     method: "POST",
@@ -93,13 +86,12 @@ async function uploadArtworkImage(artworkId, file) {
   }
 
   const data = await res.json();
-  return data.secure_url; // 画像URL (https://〜)
+  return data.secure_url; // https://〜 の画像URL
 }
 
-
-/* ******************************************************************
- *                           ログイン処理
- * ******************************************************************/
+/* =================================================================
+   ログイン処理
+   ================================================================= */
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -114,9 +106,9 @@ async function handleLogin(e) {
     return;
   }
 
-  currentCode = raw;              // "A00001" / "B00001" / "C00001"
-  currentType = raw.charAt(0);    // "A" / "B" / "C"
-  currentArtworkId = raw;         // ★ 作品IDとして「A00001」「B00001」をそのまま使う
+  currentCode = raw;           // "A00001" / "B00001" / "C00001"
+  currentType = raw.charAt(0); // "A" / "B" / "C"
+  currentImageUrl = null;
   error.textContent = "";
 
   if (currentType === "A" || currentType === "B") {
@@ -128,10 +120,9 @@ async function handleLogin(e) {
   }
 }
 
-
-/* ******************************************************************
- *                        A / B 作品画面
- * ******************************************************************/
+/* =================================================================
+   A / B 作品画面
+   ================================================================= */
 
 async function setupArtScreen() {
   const title = document.getElementById("art-title");
@@ -140,11 +131,11 @@ async function setupArtScreen() {
   const imagePreview = document.getElementById("art-image-preview");
   const imagePlaceholder = document.getElementById("art-image-placeholder");
 
-  // 画面タイトルはログインコードそのままを表示
+  // タイトルはログインコードをそのまま表示
   title.textContent = currentCode + " さんの作品ページ";
 
-  // Firestore から読み込み（A/B それぞれ別のIDとして扱う）
-  const data = await loadArtworkFromServer(currentArtworkId);
+  // Firestore から読み込み（A00001 / B00001 ごとに別々）
+  const data = await loadArtworkFromServer(currentCode);
 
   if (data && data.imageUrl) {
     currentImageUrl = data.imageUrl;
@@ -170,12 +161,12 @@ async function handleImageChange(e) {
   const imagePlaceholder = document.getElementById("art-image-placeholder");
   const saveMsg = document.getElementById("art-save-message");
 
-  if (!file || !currentArtworkId) return;
+  if (!file || !currentCode) return;
 
   saveMsg.textContent = "画像をアップロード中です…";
 
   try {
-    // 先にローカルプレビュー（見た目用）
+    // 先にローカルプレビュー
     const reader = new FileReader();
     reader.onload = (event) => {
       imagePreview.src = event.target.result;
@@ -184,8 +175,8 @@ async function handleImageChange(e) {
     };
     reader.readAsDataURL(file);
 
-    // Cloudinary にアップロード（A00001 / B00001 それぞれ別ID）
-    const url = await uploadArtworkImage(currentArtworkId, file);
+    // Cloudinary へアップロード
+    const url = await uploadArtworkImage(currentCode, file);
     currentImageUrl = url;
 
     saveMsg.textContent =
@@ -200,12 +191,12 @@ async function handleImageChange(e) {
 
 // コメント＋画像URL を Firestore に保存
 async function handleSaveArt() {
-  if (!currentArtworkId) return;
+  if (!currentCode) return;
   const commentInput = document.getElementById("art-comment");
   const saveMsg = document.getElementById("art-save-message");
 
   try {
-    await saveArtworkToServer(currentArtworkId, {
+    await saveArtworkToServer(currentCode, {
       imageUrl: currentImageUrl || null,
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
@@ -225,10 +216,9 @@ function handleCommentInput(e) {
   countSpan.textContent = e.target.value.length.toString();
 }
 
-
-/* ******************************************************************
- *                     C 管理画面（アンケート）
- * ******************************************************************/
+/* =================================================================
+   C 管理画面（アンケート）
+   ================================================================= */
 
 async function setupAdminScreen() {
   document.getElementById("survey-save-message").textContent = "";
@@ -389,10 +379,9 @@ async function handleSurveyReset() {
   }
 }
 
-
-/* ******************************************************************
- *                               共通
- * ******************************************************************/
+/* =================================================================
+   共通
+   ================================================================= */
 
 function escapeHtml(str) {
   return String(str)
@@ -406,7 +395,6 @@ function escapeHtml(str) {
 function logout() {
   currentCode = null;
   currentType = null;
-  currentArtworkId = null;
   currentImageUrl = null;
   document.getElementById("login-code").value = "";
   document.getElementById("login-error").textContent = "";
