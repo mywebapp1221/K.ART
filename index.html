@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -240,7 +240,7 @@
           required
         />
 
-        <!-- M / E だけが必要なパスワード欄（B は空のままでOK） -->
+        <!-- M / E / B 用パスワード欄（Bは個別設定） -->
         <label for="login-password">パスワード</label>
         <input
           type="password"
@@ -348,6 +348,41 @@
         <h3>アンケートのリセット</h3>
         <button id="reset-survey" class="btn danger wide">全削除</button>
         <p id="survey-reset-message" class="info-message"></p>
+      </div>
+
+      <!-- ▼▼▼ Bユーザー用パスワード設定（E00002 のときだけ表示） ▼▼▼ -->
+      <div class="card hidden" id="bpassword-card">
+        <h3>Bユーザー用ログインパスワード設定</h3>
+        <p style="font-size:12px; color:#6b7280; margin-top:0; margin-bottom:12px;">
+          B から始まるコードのお客様に、それぞれ専用の4桁パスワードを設定できます。
+        </p>
+
+        <form id="bpassword-form">
+          <label for="b-code">コード（B00001 など）</label>
+          <input
+            type="text"
+            id="b-code"
+            maxlength="6"
+            autocomplete="off"
+            placeholder="B00001"
+          />
+
+          <label for="b-pass">パスワード（4桁）</label>
+          <input
+            type="text"
+            id="b-pass"
+            maxlength="4"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="例）1234"
+          />
+
+          <button type="submit" class="btn primary wide">
+            パスワードを保存
+          </button>
+        </form>
+
+        <p id="bpassword-message" class="info-message"></p>
       </div>
     </section>
 

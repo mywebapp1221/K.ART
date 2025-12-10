@@ -1,7 +1,8 @@
 // ==================== Firestore コレクション名 ====================
 const COLLECTIONS = {
-  artworks: "artworks", // M / B の作品
-  surveys: "surveys",   // E のアンケート結果
+  artworks: "artworks",   // M / B の作品
+  surveys: "surveys",     // E のアンケート結果
+  bPasswords: "bPasswords", // Bユーザー用ログインパスワード
 };
 
 // ==================== Cloudinary 設定 ====================
@@ -32,7 +33,7 @@ async function loadArtworkFromServer(code) {
   return snap.exists ? snap.data() : null;
 }
 
-// 作品保存（merge:true）
+// 作品保存
 async function saveArtworkToServer(code, data) {
   const docRef = db.collection(COLLECTIONS.artworks).doc(code);
   await docRef.set(data, { merge: true });
@@ -58,6 +59,20 @@ async function resetSurveysOnServer() {
   const batch = db.batch();
   snap.forEach((d) => batch.delete(d.ref));
   await batch.commit();
+}
+
+// ===== Bユーザー用パスワード保存／取得 =====
+async function setBPasswordOnServer(code, password) {
+  const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
+  await docRef.set({ password: String(password) }, { merge: true });
+}
+
+async function getBPasswordFromServer(code) {
+  const docRef = db.collection(COLLECTIONS.bPasswords).doc(code);
+  const snap = await docRef.get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  return data.password ? String(data.password) : null;
 }
 
 /* =================================================================
@@ -108,10 +123,31 @@ async function handleLogin(e) {
 
   const head = rawCode.charAt(0); // "M" / "B" / "E"
 
-  // ★ M と E だけパスワード必須（1221）
+  // ---- M / E のパスワード（共通：1221）----
   if (head === "M" || head === "E") {
     if (password !== "1221") {
       error.textContent = "パスワードが正しくありません。";
+      return;
+    }
+  }
+
+  // ---- Bユーザーのパスワードチェック（個別 4桁）----
+  if (head === "B") {
+    if (!/^[0-9]{4}$/.test(password)) {
+      error.textContent = "パスワード（4桁）を入力してください。";
+      return;
+    }
+
+    const saved = await getBPasswordFromServer(rawCode);
+
+    if (!saved) {
+      error.textContent =
+        "このコードのパスワードがまだ設定されていません。スタッフにお声がけください。";
+      return;
+    }
+
+    if (password !== saved) {
+      error.textContent = "パスワードが違います。";
       return;
     }
   }
@@ -286,7 +322,6 @@ async function handleFeatureArt() {
     return;
   }
 
-  // 最新データ取得
   const artwork = await loadArtworkFromServer(currentCode);
   const imageUrl = artwork?.imageUrl || currentImageUrl;
   const comment =
@@ -300,7 +335,6 @@ async function handleFeatureArt() {
   }
 
   try {
-    // この作品に featuredAt を付ける（M として）
     await saveArtworkToServer(currentCode, {
       type: "M",
       featuredAt: Date.now(),
@@ -309,7 +343,6 @@ async function handleFeatureArt() {
     msg.textContent = "みんなの作品を入れ替えました。";
     setTimeout(() => (msg.textContent = ""), 2500);
 
-    // ログイン画面側も更新
     await renderFeaturedOnLogin();
   } catch (err) {
     console.error(err);
@@ -318,12 +351,23 @@ async function handleFeatureArt() {
 }
 
 /* =================================================================
-   E 管理画面（アンケート）
+   E 管理画面（アンケート & Bパスワード）
    ================================================================= */
 
 async function setupAdminScreen() {
   document.getElementById("survey-save-message").textContent = "";
   document.getElementById("survey-reset-message").textContent = "";
+
+  // E00002 のときだけ Bパスワードカードを表示
+  const bCard = document.getElementById("bpassword-card");
+  if (bCard) {
+    if (currentCode === "E00002") {
+      bCard.classList.remove("hidden");
+    } else {
+      bCard.classList.add("hidden");
+    }
+  }
+
   await renderSurveyData();
 }
 
@@ -432,6 +476,41 @@ async function handleSurveyReset() {
   }
 }
 
+// Bユーザー用パスワード設定フォーム
+async function handleBPasswordSubmit(e) {
+  e.preventDefault();
+
+  const codeInput = document.getElementById("b-code");
+  const passInput = document.getElementById("b-pass");
+  const msg = document.getElementById("bpassword-message");
+
+  const codeRaw = (codeInput.value || "").trim().toUpperCase();
+  const passRaw = (passInput.value || "").trim();
+
+  const pattern = /^B[0-9]{5}$/;
+  if (!pattern.test(codeRaw)) {
+    msg.textContent = "「B00001」のように B + 5桁の数字で入力してください。";
+    return;
+  }
+  if (!/^[0-9]{4}$/.test(passRaw)) {
+    msg.textContent = "4桁の数字でパスワードを入力してください。";
+    return;
+  }
+
+  try {
+    await setBPasswordOnServer(codeRaw, passRaw);
+    msg.textContent = `${codeRaw} のパスワードを保存しました。`;
+    setTimeout(() => (msg.textContent = ""), 2500);
+
+    codeInput.value = "";
+    passInput.value = "";
+  } catch (err) {
+    console.error(err);
+    msg.textContent =
+      "保存に失敗しました。時間をおいて再度お試しください。";
+  }
+}
+
 /* =================================================================
    ログイン画面の「みんなの作品」表示
    ================================================================= */
@@ -441,8 +520,6 @@ async function renderFeaturedOnLogin() {
   if (!container) return;
 
   try {
-    // featuredAt の新しい順で 30 件くらい取得して、その中から
-    // 「type が M」「featuredAt があるもの」だけを 8 件に絞る
     const snap = await db
       .collection(COLLECTIONS.artworks)
       .orderBy("featuredAt", "desc")
@@ -521,7 +598,7 @@ function logout() {
   if (error) error.textContent = "";
 
   showScreen("login-screen");
-  renderFeaturedOnLogin(); // ログアウト後も最新の一覧を表示
+  renderFeaturedOnLogin();
 }
 
 function init() {
@@ -567,6 +644,11 @@ function init() {
   document
     .getElementById("logout-admin")
     .addEventListener("click", logout);
+
+  const bForm = document.getElementById("bpassword-form");
+  if (bForm) {
+    bForm.addEventListener("submit", handleBPasswordSubmit);
+  }
 
   // 最初のトップページの作品表示
   renderFeaturedOnLogin();
