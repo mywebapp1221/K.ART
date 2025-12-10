@@ -73,7 +73,7 @@ async function uploadArtworkImage(code, file) {
   const formData = new FormData();
   formData.append("file", file);                  // 画像ファイル
   formData.append("upload_preset", uploadPreset); // Unsigned preset
-  formData.append("public_id", code);             // 例: "A00001"
+  formData.append("public_id", code);             // 例: "A00001" / "B00001"
   formData.append("folder", "karts-artworks");    // Cloudinary のフォルダ名（任意）
 
   const res = await fetch(url, {
@@ -86,6 +86,7 @@ async function uploadArtworkImage(code, file) {
   }
 
   const data = await res.json();
+  console.log("Cloudinary URL:", data.secure_url);
   return data.secure_url; // https://〜 の画像URL
 }
 
@@ -197,7 +198,7 @@ async function handleSaveArt() {
 
   try {
     await saveArtworkToServer(currentCode, {
-      imageUrl: currentImageUrl || null,   // ★ URL だけ
+      imageUrl: currentImageUrl || null,
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
     });
