@@ -73,9 +73,10 @@ async function uploadArtworkImage(code, file) {
   const formData = new FormData();
   formData.append("file", file);                  // 画像ファイル
   formData.append("upload_preset", uploadPreset); // Unsigned preset
-  // ⚠ public_id は指定しない（同じIDだと unsigned では上書きできないため）
-  // 代わりにフォルダだけ指定して、Cloudinary にユニークなIDを作ってもらう
-  formData.append("folder", `karts-artworks/${code}`);
+  // public_id は「コード＋タイムスタンプ」にしておく（毎回ユニーク）
+  const publicId = `${code}_${Date.now()}`;
+  formData.append("public_id", publicId);
+  formData.append("folder", "karts-artworks");    // Cloudinary のフォルダ名（任意）
 
   const res = await fetch(url, {
     method: "POST",
@@ -83,13 +84,15 @@ async function uploadArtworkImage(code, file) {
   });
 
   if (!res.ok) {
-    console.error("Cloudinary upload error:", await res.text());
     throw new Error("Cloudinary へのアップロードに失敗しました");
   }
 
   const data = await res.json();
   console.log("Cloudinary URL:", data.secure_url);
-  return data.secure_url; // https://〜 の画像URL
+  return {
+    imageUrl: data.secure_url,
+    publicId: data.public_id, // "karts-artworks/コード_タイムスタンプ" の形
+  };
 }
 
 /* =================================================================
@@ -179,11 +182,18 @@ async function handleImageChange(e) {
     reader.readAsDataURL(file);
 
     // Cloudinary へアップロード
-    const url = await uploadArtworkImage(currentCode, file);
-    currentImageUrl = url;
+    const { imageUrl, publicId } = await uploadArtworkImage(currentCode, file);
+    currentImageUrl = imageUrl;
+
+    // Firestore にも即反映（画像だけ先に確定）
+    await saveArtworkToServer(currentCode, {
+      imageUrl,
+      publicId,  // 後で Cloudinary 側を手動削除したい時に使える
+      updatedAt: new Date().toISOString(),
+    });
 
     saveMsg.textContent =
-      "画像をアップロードしました。「作品を保存する」で確定します。";
+      "画像をアップロードしました。「作品を保存する」でコメントも保存できます。";
     setTimeout(() => (saveMsg.textContent = ""), 2500);
   } catch (err) {
     console.error(err);
@@ -192,7 +202,7 @@ async function handleImageChange(e) {
   }
 }
 
-// コメント＋画像URL を Firestore に保存
+// コメント＋画像URL を Firestore に保存（コメントだけ変更する時用）
 async function handleSaveArt() {
   if (!currentCode) return;
   const commentInput = document.getElementById("art-comment");
@@ -200,6 +210,7 @@ async function handleSaveArt() {
 
   try {
     await saveArtworkToServer(currentCode, {
+      // imageUrl は currentImageUrl をそのまま再保存
       imageUrl: currentImageUrl || null,
       comment: commentInput.value || "",
       updatedAt: new Date().toISOString(),
@@ -214,9 +225,54 @@ async function handleSaveArt() {
   }
 }
 
+// 入力文字数カウンター
 function handleCommentInput(e) {
   const countSpan = document.getElementById("art-comment-count");
   countSpan.textContent = e.target.value.length.toString();
+}
+
+// ★ 画像削除ボタン（サイト上から画像を消す）
+async function handleDeleteImage() {
+  if (!currentCode) return;
+
+  const imagePreview = document.getElementById("art-image-preview");
+  const imagePlaceholder = document.getElementById("art-image-placeholder");
+  const saveMsg = document.getElementById("art-save-message");
+
+  if (!currentImageUrl) {
+    saveMsg.textContent = "削除する画像がありません。";
+    setTimeout(() => (saveMsg.textContent = ""), 2000);
+    return;
+  }
+
+  const ok = confirm("本当にこの画像を削除しますか？\n（サイト上から見えなくなります）");
+  if (!ok) return;
+
+  try {
+    // Firestore 上の imageUrl を null にする（論理削除）
+    await saveArtworkToServer(currentCode, {
+      imageUrl: null,
+      // publicId も消しておく（必要なら）
+      publicId: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // フロント側の状態もリセット
+    currentImageUrl = null;
+    imagePreview.src = "";
+    imagePreview.classList.add("hidden");
+    imagePlaceholder.classList.remove("hidden");
+
+    saveMsg.textContent = "画像を削除しました。";
+    setTimeout(() => (saveMsg.textContent = ""), 2000);
+  } catch (err) {
+    console.error(err);
+    saveMsg.textContent =
+      "画像の削除に失敗しました。時間をおいて再度お試しください。";
+  }
+
+  // ※ Cloudinary 内のファイルそのものは残ります。
+  //   完全に消したい場合は Cloudinary のコンソールから削除してください。
 }
 
 /* =================================================================
@@ -427,6 +483,12 @@ function init() {
     .getElementById("save-art")
     .addEventListener("click", () => {
       handleSaveArt();
+    });
+
+  document
+    .getElementById("delete-image")
+    .addEventListener("click", () => {
+      handleDeleteImage();
     });
 
   document
