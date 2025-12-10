@@ -164,7 +164,7 @@ async function setupArtScreen() {
   title.textContent = `${currentCode} さんの作品ページ`;
   msg.textContent = "";
 
-  // M の人だけ「トップページに表示」ボタンを出す
+  // M の人だけ「入れ替える」ボタンを出す
   if (currentType === "M") {
     featureBtn.classList.remove("hidden");
   } else {
@@ -291,7 +291,7 @@ async function handleDeleteImage() {
   }
 }
 
-// ★ Mユーザー専用：この作品をトップページの one/two & three/four に入れ替える
+// ★ Mユーザー専用：この作品をトップページの「みんなの作品」に入れ替え
 async function handleFeatureArt() {
   const msg = document.getElementById("art-save-message");
 
@@ -301,7 +301,7 @@ async function handleFeatureArt() {
     return;
   }
 
-  // 最新の作品データを取得（念のため）
+  // 念のため最新データ取得
   const artwork = await loadArtworkFromServer(currentCode);
   const imageUrl = artwork?.imageUrl || currentImageUrl;
   const comment =
@@ -309,34 +309,48 @@ async function handleFeatureArt() {
     document.getElementById("art-comment").value.trim();
 
   if (!imageUrl || !comment) {
-    msg.textContent = "画像と文章を保存してから「トップページに表示」を押してください。";
+    msg.textContent = "画像と文章を保存してから「入れ替える」を押してください。";
     setTimeout(() => (msg.textContent = ""), 3000);
     return;
   }
 
   try {
-    // 今の featured を取得
+    // 既存の featured を取得
     const data = (await loadFeaturedFromServer()) || {};
-    const slot1 = data.slot1 || null;
-    const slot2 = data.slot2 || null;
+    let items = Array.isArray(data.items) ? data.items : [];
 
-    // ロジック：
-    // - いまの slot2 を slot1 にずらす
-    // - 今回の作品を slot2 に入れる
-    const newSlot1 = slot2 && slot2.imageUrl ? slot2 : null;
-    const newSlot2 = {
+    // すでにある古い形式(slot1/slot2)があれば一度だけ取り込む
+    if (!items.length) {
+      if (data.slot1) items.push(data.slot1);
+      if (data.slot2) items.push(data.slot2);
+    }
+
+    // M 以外(Bなど)を除外しつつ、同じコードは消しておく
+    items = items.filter(
+      (it) =>
+        it &&
+        typeof it.code === "string" &&
+        it.code.startsWith("M") &&
+        it.code !== currentCode
+    );
+
+    // 先頭に今回の作品を追加（= 一番目の「one / three」）
+    items.unshift({
       code: currentCode,
       imageUrl,
       comment,
-    };
+      createdAt: new Date().toISOString(),
+    });
+
+    // 最大 8 件までに切り詰め
+    items = items.slice(0, 8);
 
     await saveFeaturedToServer({
-      slot1: newSlot1,
-      slot2: newSlot2,
+      items,
       updatedAt: new Date().toISOString(),
     });
 
-    msg.textContent = "トップページの作品を入れ替えました。";
+    msg.textContent = "みんなの作品を入れ替えました。";
     setTimeout(() => (msg.textContent = ""), 2500);
 
     // ログイン画面側も更新
@@ -473,24 +487,35 @@ async function renderFeaturedOnLogin() {
   try {
     const data = await loadFeaturedFromServer();
 
-    if (
-      !data ||
-      (!data.slot1 || !data.slot1.imageUrl) &&
-      (!data.slot2 || !data.slot2.imageUrl)
-    ) {
+    let items = [];
+    if (data) {
+      if (Array.isArray(data.items)) {
+        items = data.items;
+      } else {
+        // 古い形式(slot1/slot2)を一時的にサポート
+        if (data.slot1) items.push(data.slot1);
+        if (data.slot2) items.push(data.slot2);
+      }
+    }
+
+    // M から始まるコードだけ・画像があるものだけ・最大8件
+    items = items.filter(
+      (it) =>
+        it &&
+        typeof it.code === "string" &&
+        it.code.startsWith("M") &&
+        it.imageUrl
+    ).slice(0, 8);
+
+    if (!items.length) {
       container.innerHTML =
         '<p class="featured-placeholder">まだ作品は表示されていません。</p>';
       return;
     }
 
-    const slots = [];
-    if (data.slot1 && data.slot1.imageUrl) slots.push(data.slot1);
-    if (data.slot2 && data.slot2.imageUrl) slots.push(data.slot2);
-
-    // 左が ONE/THREE、右が TWO/FOUR に相当
     container.innerHTML = `
       <div class="featured-grid">
-        ${slots
+        ${items
           .map(
             (s) => `
               <article class="featured-item">

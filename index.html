@@ -142,7 +142,7 @@
       margin-top: 4px;
     }
 
-    /* ▼ トップページに出す「ONE/TWO & THREE/FOUR」用 ▼ */
+    /* ▼ トップページの「みんなの作品」用 ▼ */
     .featured-section {
       max-width: 900px;
       margin: 32px auto 0;
@@ -211,7 +211,7 @@
       .subtitle { font-size: 14px; }
       .btn { font-size: 16px; }
       .featured-grid {
-        grid-template-columns: 1fr; /* スマホでは縦に2つ並べる */
+        grid-template-columns: 1fr; /* スマホでは1列×最大8行表示 */
       }
     }
   </style>
@@ -254,11 +254,11 @@
         <p id="login-error" class="error-message"></p>
       </form>
 
-      <!-- ▼ トップページに出す 2 枚の作品 (one/two & three/four) ▼ -->
+      <!-- ▼ みんなの作品（M だけ・最大8枚） ▼ -->
       <section class="featured-section">
-        <h2 class="featured-title">みんなの作品（一部）</h2>
+        <h2 class="featured-title">みんなの作品</h2>
         <p class="featured-desc">
-          M から始まるコードの作品の中から、最大 2 作品が表示されます。
+          これまでに作られたアート作品の一部です。
         </p>
         <div id="featured-container"></div>
       </section>
@@ -288,9 +288,9 @@
 
         <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
           <button id="delete-image" class="btn danger small">画像を削除する</button>
-          <!-- ★ M の人専用：トップページの one/two & three/four を入れ替える -->
+          <!-- ★ M の人専用：トップページに入れ替えるボタン -->
           <button id="feature-art" class="btn secondary small hidden">
-            この作品をトップページに表示
+            入れ替える
           </button>
         </div>
       </div>
