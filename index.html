@@ -1,26 +1,21 @@
-<!DOCTYPE html>
+<!DOCTYPE html>   
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <title>K.ARTS ログイン</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <style>
     * { box-sizing: border-box; }
 
-    /* =======================================
-       ▼ K.ARTS 共通 背景グラデーション
-       ======================================= */
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-
+      /* K.ARTS 共通グラデ背景 */
       background: radial-gradient(circle at 10% 20%, #8fd3f4 0, transparent 40%),
                   radial-gradient(circle at 90% 80%, #a1ffce 0, transparent 45%),
                   linear-gradient(135deg, #1e293b 0%, #020617 60%, #022c22 100%);
       background-attachment: fixed;
-
-      color: #111;
+      color: #111827;
       min-height: 100vh;
     }
 
@@ -33,25 +28,21 @@
     .screen { display: none; }
     .screen.active { display: block; }
 
-    /* =============================
-       ▼ ログイン画面
-       ============================= */
     .brand {
       text-align: center;
       font-size: 44px;
       letter-spacing: 0.2em;
       margin: 12px 0 6px;
-      color: #fff;
+      color: #ffffff;
       text-shadow: 0 2px 8px rgba(0,0,0,0.4);
     }
-
     .subtitle {
       text-align: center;
       font-size: 15px;
       color: #e5e7eb;
       margin-bottom: 20px;
       line-height: 1.6;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.3);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     #login-form {
@@ -66,8 +57,7 @@
     label {
       font-weight: 600;
       margin-bottom: 4px;
-      color: #fff;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.3);
+      color: #f9fafb;
     }
 
     input[type="text"],
@@ -80,21 +70,16 @@
       border-radius: 8px;
       border: 1px solid #d1d5db;
       outline: none;
-      background: #ffffffdd;
-      backdrop-filter: blur(8px);
+      background: #ffffffee;
     }
-
     input:focus,
     textarea:focus {
       border-color: #2563eb;
-      box-shadow: 0 0 0 1px #2563eb50;
+      box-shadow: 0 0 0 1px #2563eb20;
     }
 
     textarea { resize: vertical; }
 
-    /* =============================
-       ▼ ボタン
-       ============================= */
     .btn {
       border: none;
       border-radius: 999px;
@@ -103,65 +88,56 @@
       font-weight: 600;
       cursor: pointer;
     }
-
-    .btn.primary {
-      background: #2563eb;
-      color: #fff;
-    }
-
-    .btn.primary:hover { opacity: 0.92; }
-
-    .btn.secondary {
-      background: #e5e7eb;
-      color: #111;
-    }
-
+    .btn.primary { background: #2563eb; color: #ffffff; }
+    .btn.primary:hover { opacity: 0.9; }
+    .btn.secondary { background: #e5e7eb; color: #111827; }
     .btn.secondary:hover { background: #d1d5db; }
-
     .btn.small { font-size: 14px; padding: 6px 12px; }
     .btn.wide { width: 100%; }
     .btn.danger { background: #dc2626; color: #fff; }
 
     .error-message { color: #fca5a5; min-height: 1.2em; }
-    .info-message { color: #bbf7d0; min-height: 1.2em; font-size: 14px; }
+    .info-message { color: #bbf7d0; min-height: 1.2em; font-size: 14px; margin-top: 8px; }
 
-    /* =============================
-       ▼ カード（白い箱 UI）
-       ============================= */
-    .card {
-      background: #ffffffdd;
-      border-radius: 16px;
-      padding: 16px;
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
       margin-bottom: 16px;
-      box-shadow: 0 4px 12px #00000025;
-      backdrop-filter: blur(6px);
+      flex-wrap: wrap;
     }
 
-    /* =============================
-       ▼ 画像アップロード
-       ============================= */
+    .card {
+      background: #ffffffee;
+      border-radius: 16px;
+      padding: 14px 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 12px #00000022;
+    }
+
     .image-area {
       border-radius: 16px;
       border: 1px dashed #d1d5db;
-      background: #f9fafbcc;
+      background: #f9fafb;
+      padding: 12px;
       min-height: 160px;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 12px;
     }
-
     .art-image {
       max-width: 100%;
       max-height: 280px;
       border-radius: 12px;
     }
-
     .image-placeholder {
       color: #9ca3af;
       text-align: center;
       padding: 24px 8px;
     }
+    .hidden { display: none; }
 
     .file-label {
       display: inline-block;
@@ -169,14 +145,10 @@
       padding: 8px 14px;
       border-radius: 999px;
       border: 1px solid #9ca3af;
-      background: #ffffffdd;
+      font-size: 14px;
       cursor: pointer;
-      backdrop-filter: blur(6px);
     }
-
     .file-label input { display: none; }
-
-    .hidden { display: none; }
 
     .char-counter {
       text-align: right;
@@ -185,68 +157,66 @@
       margin-top: 4px;
     }
 
-    /* =============================
-       ▼ みんなの作品（トップページ）
-       ============================= */
+    /* ▼ トップページの「みんなの作品」用 ▼ */
     .featured-section {
       max-width: 900px;
       margin: 32px auto 0;
     }
-
     .featured-title {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
-      margin-bottom: 6px;
+      margin: 0 0 4px;
       text-align: center;
-      color: #fff;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.4);
+      color: #f9fafb;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.4);
     }
-
     .featured-desc {
       font-size: 13px;
       color: #e5e7eb;
-      margin-bottom: 14px;
+      margin: 0 0 12px;
       text-align: center;
       text-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
-
     .featured-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
     }
-
     .featured-item {
-      background: #ffffffdd;
+      background: #ffffffee;
       border-radius: 16px;
       padding: 10px 10px 12px;
       box-shadow: 0 4px 12px #00000022;
-      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-
     .featured-img-wrap {
       border-radius: 12px;
       overflow: hidden;
-      background: #f9fafbcc;
+      background: #f9fafb;
       min-height: 120px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-
     .featured-img {
       max-width: 100%;
       max-height: 220px;
       display: block;
     }
-
+    .featured-placeholder {
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 16px 8px;
+      text-align: center;
+    }
     .featured-comment {
       font-size: 13px;
       line-height: 1.5;
       min-height: 3em;
       white-space: pre-wrap;
     }
-
     .featured-code {
       font-size: 11px;
       color: #6b7280;
@@ -257,7 +227,10 @@
       #app { padding: 12px 10px 24px; }
       .brand { font-size: 34px; }
       .subtitle { font-size: 14px; }
-      .featured-grid { grid-template-columns: 1fr; }
+      .btn { font-size: 16px; }
+      .featured-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -265,38 +238,51 @@
 <body>
   <div id="app">
 
-    <!-- =============================
-         ▼ ログイン画面
-         ============================= -->
+    <!-- ▼▼▼ ログイン画面 ▼▼▼ -->
     <section id="login-screen" class="screen active">
       <h1 class="brand">K.ARTS</h1>
       <p class="subtitle">
         缶ケースに書いてあるログインコードを入力してください<br>
-        例）B00001
+        例） B00001
       </p>
 
       <form id="login-form">
+        <!-- ログインコード -->
         <label for="login-code">ログインコード（アルファベット1文字 + 5桁数字）</label>
-        <input id="login-code" type="text" maxlength="6" required />
+        <input
+          type="text"
+          id="login-code"
+          maxlength="6"
+          placeholder="B00001 など"
+          autocomplete="off"
+          required
+        />
 
-        <label for="login-password">パスワード（必要な場合のみ）</label>
-        <input id="login-password" type="password" maxlength="4" />
+        <!-- M / E / B 用パスワード欄（Bは個別設定） -->
+        <label for="login-password">パスワード</label>
+        <input
+          type="password"
+          id="login-password"
+          maxlength="4"
+          placeholder=""
+          autocomplete="off"
+        />
 
         <button type="submit" class="btn primary">ログイン</button>
         <p id="login-error" class="error-message"></p>
       </form>
 
-      <!-- みんなの作品 -->
+      <!-- ▼ みんなの作品（M だけ・最大8枚） ▼ -->
       <section class="featured-section">
         <h2 class="featured-title">みんなの作品</h2>
-        <p class="featured-desc">これまでに作られたアート作品の一部です。</p>
+        <p class="featured-desc">
+          これまでに作られたアート作品の一部です。
+        </p>
         <div id="featured-container"></div>
       </section>
     </section>
 
-    <!-- =============================
-         ▼ B / M 作品画面
-         ============================= -->
+    <!-- ▼▼▼ M / B 作品画面 ▼▼▼ -->
     <section id="art-screen" class="screen">
       <header class="top-bar">
         <h2 id="art-title"></h2>
@@ -318,16 +304,21 @@
           <input type="file" id="art-image-input" accept="image/*" />
         </label>
 
-        <div style="margin-top: 8px; display:flex; gap:8px;">
-          <button id="delete-image" class="btn danger small">画像を削除</button>
-          <button id="feature-art" class="btn secondary small hidden">トップに表示</button>
+        <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="delete-image" class="btn danger small">画像を削除する</button>
+          <!-- ★ M の人専用：トップページに入れ替えるボタン -->
+          <button id="feature-art" class="btn secondary small hidden">
+            入れ替える
+          </button>
         </div>
       </div>
 
       <div class="card">
         <h3>作品への思い（0〜300文字）</h3>
         <textarea id="art-comment" rows="5" maxlength="300"></textarea>
-        <div class="char-counter"><span id="art-comment-count">0</span>/300 文字</div>
+        <div class="char-counter">
+          <span id="art-comment-count">0</span>/300 文字
+        </div>
       </div>
 
       <div class="card">
@@ -336,9 +327,7 @@
       </div>
     </section>
 
-    <!-- =============================
-         ▼ Eユーザー（管理画面）
-         ============================= -->
+    <!-- ▼▼▼ E 管理画面 ▼▼▼ -->
     <section id="admin-screen" class="screen">
       <header class="top-bar">
         <h2>管理画面（Eユーザー専用）</h2>
@@ -346,7 +335,7 @@
       </header>
 
       <div class="card">
-        <h3>アンケート入力</h3>
+        <h3>アンケート結果の入力</h3>
         <form id="survey-form">
           <label>年齢</label>
           <input id="age" type="number" min="0" max="120" required />
@@ -379,18 +368,36 @@
         <p id="survey-reset-message" class="info-message"></p>
       </div>
 
-      <!-- Bユーザー用パスワード設定 -->
-      <div id="bpassword-card" class="card hidden">
+      <!-- ▼▼▼ Bユーザー用パスワード設定（E00002 のときだけ表示） ▼▼▼ -->
+      <div class="card hidden" id="bpassword-card">
         <h3>Bユーザー用ログインパスワード設定</h3>
+        <p style="font-size:12px; color:#6b7280; margin-top:0; margin-bottom:12px;">
+          B から始まるコードのお客様に、それぞれ専用の4桁パスワードを設定できます。
+        </p>
 
         <form id="bpassword-form">
           <label for="b-code">コード（B00001 など）</label>
-          <input id="b-code" type="text" maxlength="6" />
+          <input
+            type="text"
+            id="b-code"
+            maxlength="6"
+            autocomplete="off"
+            placeholder="B00001"
+          />
 
           <label for="b-pass">パスワード（4桁）</label>
-          <input id="b-pass" type="text" maxlength="4" inputmode="numeric" />
+          <input
+            type="text"
+            id="b-pass"
+            maxlength="4"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="例）1234"
+          />
 
-          <button type="submit" class="btn primary wide">保存</button>
+          <button type="submit" class="btn primary wide">
+            パスワードを保存
+          </button>
         </form>
 
         <p id="bpassword-message" class="info-message"></p>
@@ -399,13 +406,12 @@
 
   </div>
 
-  <!-- Firebase -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- あなたの JS（ログイン処理・作品管理） -->
+  <!-- 自作スクリプト -->
   <script src="firebase-config.js"></script>
   <script src="main.js"></script>
-
 </body>
 </html>
