@@ -1,4 +1,4 @@
-<!DOCTYPE html>   
+<!DOCTYPE html>    
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
@@ -139,16 +139,36 @@
     }
     .hidden { display: none; }
 
+    /* ★ 画像入れ替えボタンを大きく目立たせる */
     .file-label {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       margin-top: 4px;
-      padding: 8px 14px;
+      padding: 10px 18px;
       border-radius: 999px;
-      border: 1px solid #00040c;
-      font-size: 14px;
+      background: #2563eb;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 600;
       cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .file-label:hover {
+      opacity: 0.9;
     }
     .file-label input { display: none; }
+
+    /* 画像まわりのボタン行 */
+    .image-actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
     .char-counter {
       text-align: right;
@@ -299,17 +319,19 @@
           </div>
         </div>
 
+        <!-- ★ 画像入れ替え用ボタン（大きく青く） -->
         <label class="file-label">
-          画像ファイルを選択
+          画像ファイルを入れ替える
           <input type="file" id="art-image-input" accept="image/*" />
         </label>
 
-        <div style="margin-top: 8px; display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="delete-image" class="btn danger small">画像を削除する</button>
-          <!-- ★ M の人専用：トップページに入れ替えるボタン -->
-          <button id="feature-art" class="btn secondary small hidden">
-            入れ替える
+        <!-- ★ 入れ替えボタンを目立つ色＆先頭に -->
+        <div class="image-actions">
+          <!-- M の人専用：トップページに入れ替えるボタン -->
+          <button id="feature-art" class="btn primary small hidden">
+            トップに表示（入れ替え）
           </button>
+          <button id="delete-image" class="btn danger small">画像を削除する</button>
         </div>
       </div>
 
